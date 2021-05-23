@@ -22,7 +22,6 @@ from magenta.models.score2perf import score2perf
 
 
 tf.disable_v2_behavior()
-print('Done loading libraries')
 
 
 SF2_PATH = "/Users/jjclark/Projects/music-generation/content/Yamaha-C5-Salamander-JNv5.1.sf2"
@@ -111,7 +110,7 @@ def continuation(primer_ns):
     # decode_length = max(0, 128 - len(targets))
     # if len(targets) >= 128:
     #     print('Primer has more events than maximum sequence length; nothing will be generated.')
-    decode_length = 128
+    decode_length = 196
 
     # Generate sample events.
     sample_ids = next(unconditional_samples)['outputs']
@@ -129,7 +128,17 @@ def continuation(primer_ns):
 
 
 def main():
+    start()
+    while True:
+        update()
+        time.sleep(0.01)
+    stop()
+
+
+def start():
     global captured_notes
+    global fs
+    global midi_in
     load_unconditional_model()
 
     pygame.mixer.init()
@@ -148,23 +157,20 @@ def main():
     fs.program_select(0, sfid, 0, 0)
 
     captured_notes = music_pb2.NoteSequence()
+    print("Started")
 
-    print("Starting")
-    try:
-        while True:
-            interaction_loop(midi_in, fs)
-            time.sleep(0.01)
-    except KeyboardInterrupt:
-        pass
 
-    print("Exiting")
+def stop():
+    global fs
     pygame.midi.quit()
     fs.delete()
 
 
-def interaction_loop(midi_in, fs):
+def update():
     global captured_notes
     global last_event_time
+    global fs
+    global midi_in
 
     new_events = midi_in.read(100)
     if len(new_events) > 0:
@@ -253,8 +259,7 @@ def truncate_ns_right(ns: music_pb2.NoteSequence, time_from_end: float):
     return new_ns
 
 
-
-def main2():
+def restart():
     # I don't understand why I can hear this but not the version in interaction_loop
     import time
     import fluidsynth
@@ -275,6 +280,8 @@ def main2():
     fs.noteoff(0, 76)
 
     time.sleep(1.0)
+
+    fs.delete()
 
 
 if __name__ == "__main__":
