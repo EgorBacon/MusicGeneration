@@ -34,6 +34,16 @@ fs = fluidsynth.Synth()
 last_event_time = 0
 
 def main():
+    start()
+    while True:
+        update()
+        time.sleep(0.01)
+    stop()
+
+def start():
+    global fs
+    global midi_in
+    global captured_notes
     pygame.midi.init()
     midi_in = pygame.midi.Input(pygame.midi.get_default_input_id())
 
@@ -52,27 +62,25 @@ def main():
 
     print("Now Playing...")
 
-    try:
-        while True:
-            time.sleep(0.01)
-            interaction_loop(midi_in, fs, captured_notes)
-    except KeyboardInterrupt:
-        print("Exiting")
-        
+
+def stop():
+    global fs
     pygame.midi.quit()
     fs.delete()
 
 
 
-
-def interaction_loop(midi_in, fs, captured_notes):
+def update():
     global last_event_time
+    global captured_notes
+    global fs
+    global midi_in
 
     new_events = midi_in.read(100)
 
 
     if len(new_events) > 0:
-    	print(len(new_events), " new events", len(event_buffer))   
+        print(len(new_events), " new events", len(event_buffer))   
 
     for i in range(len(new_events)):
         event,timestamp = new_events[i]
@@ -97,7 +105,7 @@ def interaction_loop(midi_in, fs, captured_notes):
                     break
 
     if 3000 > pygame.midi.time() - last_event_time > 2000 :
-    	generate_notes(fs, captured_notes)
+        generate_notes(fs, captured_notes)
 
 # Decode a list of IDs.
 def decode(ids, encoder):
@@ -108,133 +116,133 @@ def decode(ids, encoder):
   
 
 def load_unconditional_model():
-	global unconditional_encoders
-	global unconditional_samples
-	#@title Setup and Load Checkpoint
-	#@markdown Set up generation from an unconditional Transformer
-	#@markdown model.
+    global unconditional_encoders
+    global unconditional_samples
+    #@title Setup and Load Checkpoint
+    #@markdown Set up generation from an unconditional Transformer
+    #@markdown model.
 
-	model_name = 'transformer'
-	hparams_set = 'transformer_tpu'
-	ckpt_path = './content/unconditional_model_16.ckpt'
-	#ckpt_path = 'gs://magentadata/models/music_transformer/checkpoints/unconditional_model_16.ckpt'
+    model_name = 'transformer'
+    hparams_set = 'transformer_tpu'
+    ckpt_path = './content/unconditional_model_16.ckpt'
+    #ckpt_path = 'gs://magentadata/models/music_transformer/checkpoints/unconditional_model_16.ckpt'
 
-	class PianoPerformanceLanguageModelProblem(score2perf.Score2PerfProblem):
-	  @property
-	  def add_eos_symbol(self):
-	    return True
+    class PianoPerformanceLanguageModelProblem(score2perf.Score2PerfProblem):
+      @property
+      def add_eos_symbol(self):
+        return True
 
-	problem = PianoPerformanceLanguageModelProblem()
-	unconditional_encoders = problem.get_feature_encoders()
+    problem = PianoPerformanceLanguageModelProblem()
+    unconditional_encoders = problem.get_feature_encoders()
 
-	# Set up HParams.
-	hparams = trainer_lib.create_hparams(hparams_set=hparams_set)
-	trainer_lib.add_problem_hparams(hparams, problem)
-	hparams.num_hidden_layers = 16
-	hparams.sampling_method = 'random'
+    # Set up HParams.
+    hparams = trainer_lib.create_hparams(hparams_set=hparams_set)
+    trainer_lib.add_problem_hparams(hparams, problem)
+    hparams.num_hidden_layers = 16
+    hparams.sampling_method = 'random'
 
-	# Set up decoding HParams.
-	decode_hparams = decoding.decode_hparams()
-	decode_hparams.alpha = 0.0
-	decode_hparams.beam_size = 1
+    # Set up decoding HParams.
+    decode_hparams = decoding.decode_hparams()
+    decode_hparams.alpha = 0.0
+    decode_hparams.beam_size = 1
 
-	# Create Estimator.
-	run_config = trainer_lib.create_run_config(hparams)
-	estimator = trainer_lib.create_estimator(
-	    model_name, hparams, run_config,
-	    decode_hparams=decode_hparams)
+    # Create Estimator.
+    run_config = trainer_lib.create_run_config(hparams)
+    estimator = trainer_lib.create_estimator(
+        model_name, hparams, run_config,
+        decode_hparams=decode_hparams)
 
-	# Create input generator (so we can adjust priming and
-	# decode length on the fly).
-	def input_generator():
-	  global targets
-	  global decode_length
-	  while True:
-	    yield {
-	        'targets': np.array([targets], dtype=np.int32),
-	        'decode_length': np.array(decode_length, dtype=np.int32)
-	    }
+    # Create input generator (so we can adjust priming and
+    # decode length on the fly).
+    def input_generator():
+      global targets
+      global decode_length
+      while True:
+        yield {
+            'targets': np.array([targets], dtype=np.int32),
+            'decode_length': np.array(decode_length, dtype=np.int32)
+        }
 
 
-	# Start the Estimator, loading from the specified checkpoint.
-	input_fn = decoding.make_input_fn_from_generator(input_generator())
-	unconditional_samples = estimator.predict(
-	    input_fn, checkpoint_path=ckpt_path)
+    # Start the Estimator, loading from the specified checkpoint.
+    input_fn = decoding.make_input_fn_from_generator(input_generator())
+    unconditional_samples = estimator.predict(
+        input_fn, checkpoint_path=ckpt_path)
 
-	# "Burn" one.
-	_ = next(unconditional_samples)
+    # "Burn" one.
+    _ = next(unconditional_samples)
 
-	return unconditional_encoders, unconditional_samples
+    return unconditional_encoders, unconditional_samples
 
 
 def generate_notes(fs, captured_notes):
-	
-	if len(captured_notes.notes) == 0:
-		return
+    
+    if len(captured_notes.notes) == 0:
+        return
 
-	print("generating notes")
+    print("generating notes")
 
-	process_captured_notes(captured_notes)
+    process_captured_notes(captured_notes)
 
-	primer_ns = truncate_right_ns(captured_notes, 10)
+    primer_ns = truncate_right_ns(captured_notes, 10)
 
-	continued_notes = continutation(primer_ns)
+    continued_notes = continutation(primer_ns)
 
-	note_seq.note_sequence_to_midi_file(continued_notes, "captured_notes.mid")
-	pygame.mixer.music.load("captured_notes.mid")
-	print("playing generation")
-	pygame.mixer.music.play()
-	while pygame.mixer.music.get_busy():
-		time.sleep(0.1)
+    note_seq.note_sequence_to_midi_file(continued_notes, "captured_notes.mid")
+    pygame.mixer.music.load("captured_notes.mid")
+    print("playing generation")
+    pygame.mixer.music.play()
+    while pygame.mixer.music.get_busy():
+        time.sleep(0.1)
 
 
 
 
 def continutation(primer_ns):
-	global unconditional_encoders
-	global unconditional_samples
-	global targets
-	global decode_length
-	#@title Generate Continuation
-	#@markdown Continue a piano performance, starting with the
-	#@markdown chosen priming sequence.
+    global unconditional_encoders
+    global unconditional_samples
+    global targets
+    global decode_length
+    #@title Generate Continuation
+    #@markdown Continue a piano performance, starting with the
+    #@markdown chosen priming sequence.
 
-	targets = unconditional_encoders['targets'].encode_note_sequence(
-	    primer_ns)
+    targets = unconditional_encoders['targets'].encode_note_sequence(
+        primer_ns)
 
-	# Remove the end token from the encoded primer.
-	targets = targets[:-1]
+    # Remove the end token from the encoded primer.
+    targets = targets[:-1]
 
-	decode_length = max(0, 128)
-	if len(targets) >= 256:
-	  print('Primer has more events than maximum sequence length; nothing will be generated.')
+    decode_length = max(0, 128)
+    if len(targets) >= 256:
+      print('Primer has more events than maximum sequence length; nothing will be generated.')
 
-	# Generate sample events.
-	sample_ids = next(unconditional_samples)['outputs']
+    # Generate sample events.
+    sample_ids = next(unconditional_samples)['outputs']
 
-	# Decode to NoteSequence.
-	midi_filename = decode(
-	    sample_ids,
-	    encoder=unconditional_encoders['targets'])
-	ns = note_seq.midi_file_to_note_sequence(midi_filename)
+    # Decode to NoteSequence.
+    midi_filename = decode(
+        sample_ids,
+        encoder=unconditional_encoders['targets'])
+    ns = note_seq.midi_file_to_note_sequence(midi_filename)
 
-	# Appe"nd continuation to primer.
-	continuation_ns = note_seq.concatenate_sequences([primer_ns, ns])
+    # Appe"nd continuation to primer.
+    continuation_ns = note_seq.concatenate_sequences([primer_ns, ns])
 
-	# return continuation ns
-	return ns
+    # return continuation ns
+    return ns
 
 def truncate_left_ns(ns, end_time):
-	for note in reversed(ns.notes):
-		if note.start_time > end_time:
-			ns.notes.remove(note)
+    for note in reversed(ns.notes):
+        if note.start_time > end_time:
+            ns.notes.remove(note)
 
 def truncate_right_ns(ns, time_from_end):
-	new_ns = music_pb2.NoteSequence()
-	for note in ns.notes:
-		if note.end_time > ns.total_time - time_from_end:
-			new_ns.notes.append(note)
-	return new_ns
+    new_ns = music_pb2.NoteSequence()
+    for note in ns.notes:
+        if note.end_time > ns.total_time - time_from_end:
+            new_ns.notes.append(note)
+    return new_ns
 
 def process_captured_notes(captured_notes):
     t0 = captured_notes.notes[0].start_time
@@ -246,5 +254,6 @@ def process_captured_notes(captured_notes):
 
     captured_notes.tempos.add(qpm = 60)
 
-main()
+if __name__ == "__main__":
+    main()
 
