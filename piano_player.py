@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-print('Importing libraries...')
-
 import time
 import pygame.midi
 import pygame.mixer
@@ -9,8 +7,6 @@ import note_seq
 from note_seq.protobuf import music_pb2
 import fluidsynth
 from collections import deque
-
-
 
 import numpy as np
 import os
@@ -21,12 +17,12 @@ from tensor2tensor import problems
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.utils import decoding
 from tensor2tensor.utils import trainer_lib
-tf.disable_v2_behavior()
 
 from magenta.models.score2perf import score2perf
-import note_seq
 
-print('Done!')
+
+tf.disable_v2_behavior()
+print('Done loading libraries')
 
 
 SF2_PATH = "/Users/jjclark/Projects/music-generation/content/Yamaha-C5-Salamander-JNv5.1.sf2"
@@ -112,9 +108,10 @@ def continuation(primer_ns):
     # Remove the end token from the encoded primer.
     targets = targets[:-1]
 
-    decode_length = max(0, 256 - len(targets))
-    if len(targets) >= 256:
-        print('Primer has more events than maximum sequence length; nothing will be generated.')
+    # decode_length = max(0, 128 - len(targets))
+    # if len(targets) >= 128:
+    #     print('Primer has more events than maximum sequence length; nothing will be generated.')
+    decode_length = 128
 
     # Generate sample events.
     sample_ids = next(unconditional_samples)['outputs']
@@ -211,7 +208,8 @@ def generate_notes(fs):
     print("Continuing...")
 
     process_captured_notes(captured_notes)
-    continued_notes = continuation(captured_notes)
+    primer_ns = truncate_ns_right(captured_notes, 10.0)
+    continued_notes = continuation(primer_ns)
 
     note_seq.note_sequence_to_midi_file(continued_notes, "generated_notes.mid")
     pygame.mixer.music.load("generated_notes.mid")
@@ -234,6 +232,26 @@ def process_captured_notes(captured_notes: music_pb2.NoteSequence):
     captured_notes.tempos.add(qpm=60)
 
     # note_seq.fluidsynth(captured_notes, 44000, sf2_path="./content/Yamaha-C5-Salamander-JNv5.1.sf2")
+
+
+def truncate_ns_left(ns: music_pb2.NoteSequence, end_time: float):
+    new_ns = music_pb2.NoteSequence()
+    for note in reversed(ns.notes):
+        if note.start_time > end_time:
+            ns.notes.remove(note)
+    return new_ns
+
+
+def truncate_ns_right(ns: music_pb2.NoteSequence, time_from_end: float):
+    new_ns = music_pb2.NoteSequence()
+    cutoff = ns.total_time - time_from_end
+    for note in ns.notes:
+        if note.end_time > cutoff:
+            new_ns.notes.append(note)
+
+    process_captured_notes(new_ns)
+    return new_ns
+
 
 
 def main2():
@@ -262,3 +280,7 @@ def main2():
 if __name__ == "__main__":
     retcode = main()
     exit(retcode)
+
+# agenda for next time:
+# - load this module in notebook
+# - make the main loop faster
