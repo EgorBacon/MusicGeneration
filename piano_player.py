@@ -20,6 +20,7 @@ from tensor2tensor.utils import trainer_lib
 from magenta.models.score2perf import score2perf
 
 from threading import Thread
+import pretty_midi
 
 
 tf.disable_v2_behavior()
@@ -164,6 +165,9 @@ def start():
     generation_thread = Thread(target=generate_notes_loop, args=())
     generation_thread.start()
 
+    playback_thread = Thread(target=play_captured_notes, args=())
+    playback_thread.start()
+
     print("Started")
 
 
@@ -208,6 +212,7 @@ def update():
                         velocity=event_buffer[j][0][2])
                     event_buffer.remove(event_buffer[j])
                     break
+    time.sleep(0.01)
 
     # if generated_notes is None:
     #     generate_notes()
@@ -229,7 +234,7 @@ def generate_notes():
     global last_event_time
     global generated_notes
 
-    if len(captured_notes.notes) == 0:
+    if len(captured_notes.notes) < 5:
         return
 
     if generated_notes is not None:
@@ -254,19 +259,41 @@ def play_generated_notes():
 
     print(f"Playing {len(generated_notes.notes)} generated notes")
 
-    if pygame.mixer.music.get_busy():
-        pygame.mixer.music.stop()
+    # if pygame.mixer.music.get_busy():
+    #     pygame.mixer.music.stop()
 
-    captured_notes = note_seq.concatenate_sequences([captured_notes, generated_notes])
+    captured_time = max(captured_notes.total_time, pygame.midi.time() / 1000)
+    captured_notes = note_seq.concatenate_sequences(
+        [captured_notes, generated_notes],
+        [captured_time, generated_notes.total_time])
 
-    note_seq.note_sequence_to_midi_file(generated_notes, "generated_notes.mid")
-    pygame.mixer.music.load("generated_notes.mid")
-    pygame.mixer.music.play()
-    last_event_time += pygame.midi.time() + generated_notes.total_time * 1000
-    time.sleep(0.1)
+    # note_seq.note_sequence_to_midi_file(generated_notes, "generated_notes.mid")
+    # pygame.mixer.music.load("generated_notes.mid")
+    # pygame.mixer.music.play()
+    # last_event_time += pygame.midi.time() + generated_notes.total_time * 1000
+    # time.sleep(0.1)
     # while pygame.mixer.music.get_busy():
     #     time.sleep(0.1)
     generated_notes = None
+
+
+def play_captured_notes():
+    global captured_notes
+    global fs
+
+    last_played_time = 0
+
+    while True:
+        now = pygame.midi.time() / 1000
+        for note in captured_notes.notes:
+            if last_played_time < note.start_time < now:
+                # print(f"playing {pretty_midi.note_number_to_name(note.pitch)}")
+                fs.noteon(chan=0, key=note.pitch, vel=note.velocity)
+            if last_played_time < note.end_time < now:
+                # print(f"stopping {pretty_midi.note_number_to_name(note.pitch)}")
+                fs.noteoff(chan=0, key=note.pitch)
+        last_played_time = now
+        time.sleep(0.01)
 
 
 def process_captured_notes(captured_notes: music_pb2.NoteSequence):
