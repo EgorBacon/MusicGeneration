@@ -33,6 +33,8 @@ fs = fluidsynth.Synth()
 
 last_event_time = 0
 
+generated_notes = None
+
 def main():
     start()
     while True:
@@ -88,6 +90,7 @@ def update():
         event_code, pitch, velocity, _ = event
         if 144 <= event_code < 160:
             fs.noteon(event_code - 144, pitch, velocity)
+
             last_event_time += 10000
             event_buffer.append(new_events[i])
         if 128 <= event_code < 144:
@@ -104,8 +107,8 @@ def update():
                     event_buffer.remove(event_buffer[j])
                     break
 
-    if 3000 > pygame.midi.time() - last_event_time > 2000 :
-        generate_notes(fs, captured_notes)
+    if 2000 > pygame.midi.time() - last_event_time > 1000 :
+        generate_notes(fs)
 
 # Decode a list of IDs.
 def decode(ids, encoder):
@@ -175,8 +178,11 @@ def load_unconditional_model():
     return unconditional_encoders, unconditional_samples
 
 
-def generate_notes(fs, captured_notes):
-    
+def generate_notes(fs):
+    global captured_notes
+    global last_event_time
+    global generated_notes
+
     if len(captured_notes.notes) == 0:
         return
 
@@ -186,15 +192,28 @@ def generate_notes(fs, captured_notes):
 
     primer_ns = truncate_right_ns(captured_notes, 10)
 
-    continued_notes = continutation(primer_ns)
 
-    note_seq.note_sequence_to_midi_file(continued_notes, "captured_notes.mid")
+    generated_notes = continutation(primer_ns)
+
+    play_generated_notes()
+
+def play_generated_notes():
+    global generated_notes
+    global captured_notes
+
+    if generated_notes == None:
+        return
+
+    if pygame.mixer.music.get_busy():
+        pygame.mixer.music.stop()
+
+    captured_notes = note_seq.concatenate_sequences([captured_notes, generated_notes])
+    note_seq.note_sequence_to_midi_file(generated_notes, "captured_notes.mid")
     pygame.mixer.music.load("captured_notes.mid")
     print("playing generation")
     pygame.mixer.music.play()
-    while pygame.mixer.music.get_busy():
-        time.sleep(0.1)
 
+    generated_notes = None
 
 
 
@@ -213,9 +232,7 @@ def continutation(primer_ns):
     # Remove the end token from the encoded primer.
     targets = targets[:-1]
 
-    decode_length = max(0, 128)
-    if len(targets) >= 256:
-      print('Primer has more events than maximum sequence length; nothing will be generated.')
+    decode_length = 64
 
     # Generate sample events.
     sample_ids = next(unconditional_samples)['outputs']
@@ -225,9 +242,6 @@ def continutation(primer_ns):
         sample_ids,
         encoder=unconditional_encoders['targets'])
     ns = note_seq.midi_file_to_note_sequence(midi_filename)
-
-    # Appe"nd continuation to primer.
-    continuation_ns = note_seq.concatenate_sequences([primer_ns, ns])
 
     # return continuation ns
     return ns
