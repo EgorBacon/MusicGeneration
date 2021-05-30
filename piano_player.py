@@ -9,7 +9,6 @@ import fluidsynth
 from collections import deque
 
 import numpy as np
-import os
 import tensorflow.compat.v1 as tf
 
 from tensor2tensor import models
@@ -30,9 +29,11 @@ SAMPLE_RATE = 16000
 
 event_buffer = deque()
 last_event_time = 0
+generated_notes = None
 
 targets = []
 decode_length = 0
+midi_in = None
 
 
 def load_unconditional_model():
@@ -110,7 +111,7 @@ def continuation(primer_ns):
     # decode_length = max(0, 128 - len(targets))
     # if len(targets) >= 128:
     #     print('Primer has more events than maximum sequence length; nothing will be generated.')
-    decode_length = 196
+    decode_length = 64
 
     # Generate sample events.
     sample_ids = next(unconditional_samples)['outputs']
@@ -171,6 +172,7 @@ def update():
     global last_event_time
     global fs
     global midi_in
+    global generated_notes
 
     new_events = midi_in.read(100)
     if len(new_events) > 0:
@@ -201,27 +203,55 @@ def update():
                     event_buffer.remove(event_buffer[j])
                     break
 
+    if generated_notes is None:
+        generate_notes()
+
     idle_time = pygame.midi.time() - last_event_time
-    if 2000 < idle_time < 3000:
-        generate_notes(fs)
-        captured_notes = music_pb2.NoteSequence()
+    if 1000 < idle_time < 2000:
+        play_generated_notes()
+        # captured_notes = music_pb2.NoteSequence()
 
 
-def generate_notes(fs):
+def generate_notes():
+    global captured_notes
+    global last_event_time
+    global generated_notes
+
     if len(captured_notes.notes) == 0:
         return
 
-    print("Continuing...")
+    print("Generating continued notes...")
 
     process_captured_notes(captured_notes)
     primer_ns = truncate_ns_right(captured_notes, 10.0)
-    continued_notes = continuation(primer_ns)
+    gen_start = time.time()
+    generated_notes = continuation(primer_ns)
+    print(f"spent {time.time() - gen_start} sec generating notes")
 
-    note_seq.note_sequence_to_midi_file(continued_notes, "generated_notes.mid")
+
+def play_generated_notes():
+    global captured_notes
+    global generated_notes
+    global last_event_time
+
+    if generated_notes is None:
+        return
+
+    print("Playing generated notes")
+
+    if pygame.mixer.music.get_busy():
+        pygame.mixer.music.stop()
+
+    captured_notes = note_seq.concatenate_sequences([captured_notes, generated_notes])
+
+    note_seq.note_sequence_to_midi_file(generated_notes, "generated_notes.mid")
     pygame.mixer.music.load("generated_notes.mid")
     pygame.mixer.music.play()
-    while pygame.mixer.music.get_busy():
-        time.sleep(0.1)
+    last_event_time += pygame.midi.time() + generated_notes.total_time * 1000 + 2000
+    time.sleep(0.1)
+    # while pygame.mixer.music.get_busy():
+    #     time.sleep(0.1)
+    generated_notes = None
 
 
 def process_captured_notes(captured_notes: music_pb2.NoteSequence):

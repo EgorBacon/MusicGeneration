@@ -7,6 +7,7 @@ import os.path
 import signal
 import sys
 
+
 class Reloader:
     '''
     Load a named Python module, and run its `update()` function
@@ -62,8 +63,10 @@ class Reloader:
         self.call_function('stop')
 
     def handle_signal(self, signo, frame=None):
-        signals = dict((k, v) for v, k in reversed(sorted(signal.__dict__.items()))
-            if v.startswith('SIG') and not v.startswith('SIG_'))
+        signals = dict(
+            (k, v) for v, k in reversed(sorted(signal.__dict__.items()))
+            if v.startswith('SIG') and not v.startswith('SIG_')
+        )
 
         print("Received {}, stopping program.".format(signals[signo]))
         sys.exit(0)
@@ -76,9 +79,9 @@ class Reloader:
         Then run the `stop()` function once.
         '''
         atexit.register(self.stop)
-        signal.signal(signal.SIGINT,  self.handle_signal) # Handle Ctrl-C
-        signal.signal(signal.SIGTERM, self.handle_signal) # Handle `kill`
-        signal.signal(signal.SIGHUP,  self.handle_signal) # Handle disconnect
+        signal.signal(signal.SIGINT, self.handle_signal)   # Handle Ctrl-C
+        signal.signal(signal.SIGTERM, self.handle_signal)  # Handle `kill`
+        signal.signal(signal.SIGHUP, self.handle_signal)   # Handle disconnect
         self.call_function('start')
         while True:
             self.reload_program()
@@ -87,10 +90,12 @@ class Reloader:
             except Exception as e:
                 print(e)
 
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=Reloader.__doc__)
-    parser.add_argument('filename', nargs='?', default='piano_player.py',
+    parser.add_argument(
+        'filename', nargs='?', default='piano_player.py',
         help='filename of the module to run (default: main.py)')
     args = parser.parse_args()
 
