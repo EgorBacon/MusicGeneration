@@ -19,6 +19,8 @@ from tensor2tensor.utils import trainer_lib
 
 from magenta.models.score2perf import score2perf
 
+from threading import Thread
+
 
 tf.disable_v2_behavior()
 
@@ -158,6 +160,10 @@ def start():
     fs.program_select(0, sfid, 0, 0)
 
     captured_notes = music_pb2.NoteSequence()
+
+    generation_thread = Thread(target=generate_notes_loop, args=())
+    generation_thread.start()
+
     print("Started")
 
 
@@ -203,13 +209,19 @@ def update():
                     event_buffer.remove(event_buffer[j])
                     break
 
-    if generated_notes is None:
-        generate_notes()
+    # if generated_notes is None:
+    #     generate_notes()
 
     idle_time = pygame.midi.time() - last_event_time
     if 1000 < idle_time < 2000:
         play_generated_notes()
         # captured_notes = music_pb2.NoteSequence()
+
+
+def generate_notes_loop():
+    while True:
+        generate_notes()
+        time.sleep(0.1)
 
 
 def generate_notes():
@@ -218,6 +230,9 @@ def generate_notes():
     global generated_notes
 
     if len(captured_notes.notes) == 0:
+        return
+
+    if generated_notes is not None:
         return
 
     print("Generating continued notes...")
@@ -237,7 +252,7 @@ def play_generated_notes():
     if generated_notes is None:
         return
 
-    print("Playing generated notes")
+    print(f"Playing {len(generated_notes.notes)} generated notes")
 
     if pygame.mixer.music.get_busy():
         pygame.mixer.music.stop()
@@ -247,7 +262,7 @@ def play_generated_notes():
     note_seq.note_sequence_to_midi_file(generated_notes, "generated_notes.mid")
     pygame.mixer.music.load("generated_notes.mid")
     pygame.mixer.music.play()
-    last_event_time += pygame.midi.time() + generated_notes.total_time * 1000 + 2000
+    last_event_time += pygame.midi.time() + generated_notes.total_time * 1000
     time.sleep(0.1)
     # while pygame.mixer.music.get_busy():
     #     time.sleep(0.1)
