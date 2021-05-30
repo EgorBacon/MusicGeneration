@@ -63,8 +63,10 @@ def start():
     load_unconditional_model()
 
     generation_thread = threading.Thread(target = generate_notes_loop, args = (fs,))
-
     generation_thread.start()
+
+    play_notes_thread = threading.Thread(target = play_captured_notes)
+    play_notes_thread.start()
 
     print("Now Playing...")
 
@@ -211,17 +213,34 @@ def play_generated_notes():
     if generated_notes == None:
         return
 
+    """
     if pygame.mixer.music.get_busy():
         pygame.mixer.music.stop()
 
-    captured_notes = note_seq.concatenate_sequences([captured_notes, generated_notes])
     note_seq.note_sequence_to_midi_file(generated_notes, "captured_notes.mid")
     pygame.mixer.music.load("captured_notes.mid")
     print("playing generation")
     pygame.mixer.music.play()
+    """
 
+    captured_time = max(pygame.midi.time() / 1000, captured_notes.total_time)
+    captured_notes = note_seq.concatenate_sequences([captured_notes, generated_notes],[captured_time, generated_notes.total_time])
+    
     generated_notes = None
 
+def play_captured_notes():
+    last_played_time = pygame.midi.time()
+    while True:
+        now = pygame.midi.time() / 1000
+        for note in captured_notes.notes:
+            if last_played_time < note.start_time < now:
+                fs.noteon(0, note.pitch, note.velocity)
+
+            if last_played_time < note.end_time < now:
+                fs.noteoff(0, note.pitch)
+
+        last_played_time = now
+        time.sleep(0.05)        
 
 
 def continutation(primer_ns):
