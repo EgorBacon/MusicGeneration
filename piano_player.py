@@ -62,6 +62,10 @@ def start():
 
     load_unconditional_model()
 
+    generation_thread = threading.Thread(target = generate_notes_loop, args = (fs,))
+
+    generation_thread.start()
+
     print("Now Playing...")
 
 
@@ -108,7 +112,7 @@ def update():
                     break
 
     if 2000 > pygame.midi.time() - last_event_time > 1000 :
-        generate_notes(fs)
+        play_generated_notes()
 
 # Decode a list of IDs.
 def decode(ids, encoder):
@@ -177,6 +181,10 @@ def load_unconditional_model():
 
     return unconditional_encoders, unconditional_samples
 
+def generate_notes_loop(fs):
+    while True:
+        generate_notes(fs)
+        time.sleep(0.1)
 
 def generate_notes(fs):
     global captured_notes
@@ -195,7 +203,6 @@ def generate_notes(fs):
 
     generated_notes = continutation(primer_ns)
 
-    play_generated_notes()
 
 def play_generated_notes():
     global generated_notes
