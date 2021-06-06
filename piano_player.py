@@ -34,6 +34,7 @@ fs = fluidsynth.Synth()
 last_event_time = 0
 
 generated_notes = None
+generated_bars = deque()
 
 def main():
     start()
@@ -65,8 +66,8 @@ def start():
     generation_thread = threading.Thread(target = generate_notes_loop, args = (fs,))
     generation_thread.start()
 
-    play_notes_thread = threading.Thread(target = play_captured_notes)
-    play_notes_thread.start()
+    play_selective_notes_thread = threading.Thread(target = play_selective_notes)
+    play_selective_notes_thread.start()
 
     print("Now Playing...")
 
@@ -113,8 +114,8 @@ def update():
                     event_buffer.remove(event_buffer[j])
                     break
 
-    if 2000 > pygame.midi.time() - last_event_time > 1000 :
-        play_generated_notes()
+    select_notes_to_play()
+    time.sleep(0.01)
 
 # Decode a list of IDs.
 def decode(ids, encoder):
@@ -191,56 +192,87 @@ def generate_notes_loop(fs):
 def generate_notes(fs):
     global captured_notes
     global last_event_time
-    global generated_notes
+    global generated_bars
 
-    if len(captured_notes.notes) == 0:
+    if len(captured_notes.notes) < 5:
+        return
+
+    if len(generated_bars) > 3:
         return
 
     print("generating notes")
 
     process_captured_notes(captured_notes)
 
-    primer_ns = truncate_right_ns(captured_notes, 10)
+    #primer_ns = truncate_right_ns(captured_notes, 10)
+
+    primer_ns = captured_notes
+
+    gen_start = time.time()
+    generated_bars.append(continutation(primer_ns))
+    total_time = time.time() - gen_start
+
+    print(f"Generated {len(generated_bars)} bars which took {total_time} sec")
 
 
-    generated_notes = continutation(primer_ns)
-
-
-def play_generated_notes():
-    global generated_notes
+def select_notes_to_play():
+    global generated_bars
     global captured_notes
+    global generated_notes
 
-    if generated_notes == None:
+    if len(generated_bars) == 0:
         return
 
-    """
-    if pygame.mixer.music.get_busy():
-        pygame.mixer.music.stop()
+    if generated_notes != None:
+        interrupt_playing(generated_notes)
 
-    note_seq.note_sequence_to_midi_file(generated_notes, "captured_notes.mid")
-    pygame.mixer.music.load("captured_notes.mid")
-    print("playing generation")
-    pygame.mixer.music.play()
-    """
+    idle_time = pygame.midi.time() - last_event_time
+
+    if idle_time < 1000:
+        interrupt_playing(generated_notes)
+        generated_notes = None
+        return
+    if idle_time > 30000:
+        return
+    if is_currently_playing(generated_notes):
+        return
+
+    generated_notes = generated_bars.popleft()
 
     captured_time = max(pygame.midi.time() / 1000, captured_notes.total_time)
-    captured_notes = note_seq.concatenate_sequences([captured_notes, generated_notes],[captured_time, generated_notes.total_time])
-    
-    generated_notes = None
 
-def play_captured_notes():
+    generated_notes = note_seq.concatenate_sequences([captured_notes, generated_notes],[captured_time, generated_notes.total_time])
+
+def interrupt_playing(ns):
+    global fs
+    if ns is not None:
+        for note in ns.notes:
+            fs.noteoff(0, note.pitch)
+
+def is_currently_playing(ns):
+    if not ns:
+        return False
+    if ns.total_time< pygame.midi.time() / 1000:
+        return False
+    return True
+
+def play_selective_notes():
+    global generated_notes
+    global fs
+
     last_played_time = pygame.midi.time()
     while True:
         now = pygame.midi.time() / 1000
-        for note in captured_notes.notes:
-            if last_played_time < note.start_time < now:
-                fs.noteon(0, note.pitch, note.velocity)
+        if generated_notes != None:
+            for note in generated_notes.notes:
+                if last_played_time < note.start_time < now:
+                    fs.noteon(0, note.pitch, note.velocity)
 
-            if last_played_time < note.end_time < now:
-                fs.noteoff(0, note.pitch)
+                if last_played_time < note.end_time < now:
+                    fs.noteoff(0, note.pitch)
 
         last_played_time = now
-        time.sleep(0.05)        
+        time.sleep(0.05)  
 
 
 def continutation(primer_ns):
