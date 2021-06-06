@@ -33,10 +33,12 @@ SAMPLE_RATE = 16000
 event_buffer = deque()
 last_event_time = 0
 generated_notes = None
+generated_bars = deque()
 
 targets = []
 decode_length = 0
 midi_in = None
+midi_out = None
 
 
 def load_unconditional_model():
@@ -114,7 +116,7 @@ def continuation(primer_ns):
     # decode_length = max(0, 128 - len(targets))
     # if len(targets) >= 128:
     #     print('Primer has more events than maximum sequence length; nothing will be generated.')
-    decode_length = 64
+    decode_length = 128
 
     # Generate sample events.
     sample_ids = next(unconditional_samples)['outputs']
@@ -143,6 +145,7 @@ def start():
     global captured_notes
     global fs
     global midi_in
+    global midi_out
     load_unconditional_model()
 
     pygame.mixer.init()
@@ -153,6 +156,7 @@ def start():
         return -1
 
     midi_in = pygame.midi.Input(pygame.midi.get_default_input_id())
+    midi_out = pygame.midi.Output(pygame.midi.get_default_output_id())
     print("Connected to MIDI input", pygame.midi.get_device_info(midi_in.device_id))
 
     fs = fluidsynth.Synth()
@@ -165,7 +169,7 @@ def start():
     generation_thread = Thread(target=generate_notes_loop, args=())
     generation_thread.start()
 
-    playback_thread = Thread(target=play_captured_notes, args=())
+    playback_thread = Thread(target=play_selected_notes, args=())
     playback_thread.start()
 
     print("Started")
@@ -182,7 +186,6 @@ def update():
     global last_event_time
     global fs
     global midi_in
-    global generated_notes
 
     new_events = midi_in.read(100)
     if len(new_events) > 0:
@@ -212,15 +215,9 @@ def update():
                         velocity=event_buffer[j][0][2])
                     event_buffer.remove(event_buffer[j])
                     break
+
+    select_notes_to_play()
     time.sleep(0.01)
-
-    # if generated_notes is None:
-    #     generate_notes()
-
-    idle_time = pygame.midi.time() - last_event_time
-    if 1000 < idle_time < 2000:
-        play_generated_notes()
-        # captured_notes = music_pb2.NoteSequence()
 
 
 def generate_notes_loop():
@@ -232,40 +229,61 @@ def generate_notes_loop():
 def generate_notes():
     global captured_notes
     global last_event_time
-    global generated_notes
+    global generated_bars
 
     if len(captured_notes.notes) < 5:
         return
 
-    if generated_notes is not None:
+    if len(generated_bars) > 2:
         return
 
     print("Generating continued notes...")
 
     process_captured_notes(captured_notes)
     primer_ns = truncate_ns_right(captured_notes, 10.0)
+    # primer_ns = captured_notes
     gen_start = time.time()
     generated_notes = continuation(primer_ns)
-    print(f"spent {time.time() - gen_start} sec generating notes")
+    generated_bars.append(generated_notes)
+    print(f"Spent {time.time() - gen_start} sec generating notes. {len(generated_bars)} bars in queue")
 
 
-def play_generated_notes():
+def select_notes_to_play():
     global captured_notes
+    global generated_bars
     global generated_notes
     global last_event_time
 
-    if generated_notes is None:
+    if len(generated_bars) is 0:
         return
 
-    print(f"Playing {len(generated_notes.notes)} generated notes")
+    idle_time = (pygame.midi.time() - last_event_time) / 1000
+    if idle_time < 1.0:
+        interrupt_ns(generated_notes)
+        generated_notes = None
+        return
+
+    if idle_time > 30.0:
+        return
+
+    if is_currently_playing(generated_notes):
+        return
+
+    # Select the next bar to be played
+    interrupt_ns(generated_notes)
+    generated_notes = None
+
+    tmp_notes = generated_bars.popleft()
+
+    print(f"Playing {len(tmp_notes.notes)} generated notes. {len(generated_bars)} bars in queue")
 
     # if pygame.mixer.music.get_busy():
     #     pygame.mixer.music.stop()
 
     captured_time = max(captured_notes.total_time, pygame.midi.time() / 1000)
-    captured_notes = note_seq.concatenate_sequences(
-        [captured_notes, generated_notes],
-        [captured_time, generated_notes.total_time])
+    generated_notes = note_seq.concatenate_sequences(
+        [captured_notes, tmp_notes],
+        [captured_time, tmp_notes.total_time])
 
     # note_seq.note_sequence_to_midi_file(generated_notes, "generated_notes.mid")
     # pygame.mixer.music.load("generated_notes.mid")
@@ -274,24 +292,45 @@ def play_generated_notes():
     # time.sleep(0.1)
     # while pygame.mixer.music.get_busy():
     #     time.sleep(0.1)
-    generated_notes = None
+    # generated_notes = None
 
 
-def play_captured_notes():
-    global captured_notes
+def is_currently_playing(ns):
+    if not ns:
+        return False
+    if ns.total_time < pygame.midi.time() / 1000:
+        return False
+    return True
+
+
+def interrupt_ns(ns):
     global fs
+    global midi_out
+    if ns:
+        for note in ns.notes:
+            # print(f"stopping {pretty_midi.note_number_to_name(note.pitch)}")
+            fs.noteoff(chan=0, key=note.pitch)
+            midi_out.note_off(note.pitch, velocity=note.velocity, channel=0)
+
+
+def play_selected_notes():
+    global fs
+    global midi_out
+    global generated_notes
 
     last_played_time = 0
-
     while True:
         now = pygame.midi.time() / 1000
-        for note in captured_notes.notes:
-            if last_played_time < note.start_time < now:
-                # print(f"playing {pretty_midi.note_number_to_name(note.pitch)}")
-                fs.noteon(chan=0, key=note.pitch, vel=note.velocity)
-            if last_played_time < note.end_time < now:
-                # print(f"stopping {pretty_midi.note_number_to_name(note.pitch)}")
-                fs.noteoff(chan=0, key=note.pitch)
+        if generated_notes is not None:
+            for note in generated_notes.notes:
+                if last_played_time < note.start_time < now:
+                    # print(f"playing {pretty_midi.note_number_to_name(note.pitch)}")
+                    fs.noteon(chan=0, key=note.pitch, vel=note.velocity)
+                    midi_out.note_on(note.pitch, velocity=note.velocity, channel=0)
+                if last_played_time < note.end_time < now:
+                    # print(f"stopping {pretty_midi.note_number_to_name(note.pitch)}")
+                    fs.noteoff(chan=0, key=note.pitch)
+                    midi_out.note_off(note.pitch, velocity=note.velocity, channel=0)
         last_played_time = now
         time.sleep(0.01)
 
@@ -321,6 +360,14 @@ def truncate_ns_left(ns: music_pb2.NoteSequence, end_time: float):
 
 
 def truncate_ns_right(ns: music_pb2.NoteSequence, time_from_end: float):
+    # if len(ns.notes) <= time_from_end:
+    #     return ns
+    # new_ns = music_pb2.NoteSequence()
+    # for note in ns.notes[-int(time_from_end):]:
+    #     new_ns.notes.append(note)
+    # process_captured_notes(new_ns)
+    # return new_ns
+
     new_ns = music_pb2.NoteSequence()
     cutoff = ns.total_time - time_from_end
     for note in ns.notes:
@@ -329,31 +376,6 @@ def truncate_ns_right(ns: music_pb2.NoteSequence, time_from_end: float):
 
     process_captured_notes(new_ns)
     return new_ns
-
-
-def restart():
-    # I don't understand why I can hear this but not the version in interaction_loop
-    import time
-    import fluidsynth
-    fs = fluidsynth.Synth()
-    fs.start()
-
-    sfid = fs.sfload(SF2_PATH)
-    fs.program_select(0, sfid, 0, 0)
-
-    fs.noteon(0, 60, 30)
-    fs.noteon(0, 67, 30)
-    fs.noteon(0, 76, 30)
-
-    time.sleep(1.0)
-
-    fs.noteoff(0, 60)
-    fs.noteoff(0, 67)
-    fs.noteoff(0, 76)
-
-    time.sleep(1.0)
-
-    fs.delete()
 
 
 if __name__ == "__main__":
