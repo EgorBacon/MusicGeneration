@@ -105,11 +105,13 @@ def update():
             start_code = event_code + 16
             for j in range (len(event_buffer)):
                 if event_buffer[j][0][1] == pitch and event_buffer[j][0][0] == start_code:
+                    start_time = (event_buffer[j][1]) / 1000
+                    end_time = (new_events[i][1]) / 1000
+                    velocity = event_buffer[j][0][2]
+
                     captured_notes.notes.add(
-                        pitch=pitch,
-                        start_time=(event_buffer[j][1]) / 1000,
-                        end_time=(new_events[i][1]) / 1000,
-                        velocity=event_buffer[j][0][2])
+                        pitch=pitch, start_time=start_time, end_time=end_time, velocity=velocity)
+                    captured_notes.total_time = end_time
 
                     event_buffer.remove(event_buffer[j])
                     break
@@ -204,9 +206,11 @@ def generate_notes(fs):
 
     process_captured_notes(captured_notes)
 
-    #primer_ns = truncate_right_ns(captured_notes, 10)
+    primer_ns = truncate_right_ns(captured_notes, 10)
 
-    primer_ns = captured_notes
+    #primer_ns = captured_notes
+
+    
 
     gen_start = time.time()
     generated_bars.append(continutation(primer_ns))
@@ -232,7 +236,7 @@ def select_notes_to_play():
         interrupt_playing(generated_notes)
         generated_notes = None
         return
-    if idle_time > 30000:
+    if idle_time > 15000:
         return
     if is_currently_playing(generated_notes):
         return
@@ -310,9 +314,11 @@ def truncate_left_ns(ns, end_time):
             ns.notes.remove(note)
 
 def truncate_right_ns(ns, time_from_end):
+    end_time = max(note.end_time for note in ns.notes)
+    cutoff = end_time - time_from_end
     new_ns = music_pb2.NoteSequence()
     for note in ns.notes:
-        if note.end_time > ns.total_time - time_from_end:
+        if note.end_time > cutoff:
             new_ns.notes.append(note)
     return new_ns
 
