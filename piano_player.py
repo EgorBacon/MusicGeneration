@@ -34,6 +34,7 @@ event_buffer = deque()
 last_event_time = 0
 generated_notes = None
 generated_bars = deque()
+selected_generator = "unconditional"
 
 midi_in = None
 midi_out = None
@@ -92,6 +93,7 @@ def update():
     global last_event_time
     global fs
     global midi_in
+    global selected_generator
 
     new_events = midi_in.read(100)
     # if len(new_events) > 0:
@@ -110,7 +112,7 @@ def update():
             last_event_time += 100_000
             event_buffer.append(new_events[i])
 
-        if 128 <= event_code < 144:
+        elif 128 <= event_code < 144:
             # fs.noteoff(event_code - 128, pitch)
 
             start_code = event_code + 16
@@ -119,13 +121,20 @@ def update():
                     start_time = (event_buffer[j][1]) / 1000
                     end_time = (new_events[i][1]) / 1000
                     velocity = event_buffer[j][0][2]
-                    note_name = pretty_midi.note_number_to_name(pitch)
-                    print(f"Received input {note_name}")
                     captured_notes.notes.add(
                         pitch=pitch, start_time=start_time, end_time=end_time, velocity=velocity)
                     captured_notes.total_time = end_time
                     event_buffer.remove(event_buffer[j])
                     break
+
+        elif 192 <= event_code < 208:
+            _, program_no, _, _ = event
+            if program_no == 0:
+                selected_generator = "unconditional"
+                print("Selected unconditional generator")
+            elif program_no == 2:
+                selected_generator = "melody_conditioned"
+                print("Selected accompaniment generator")
 
     select_notes_to_play()
     time.sleep(0.01)
@@ -308,13 +317,17 @@ def generate_notes_loop():
     global captured_notes
     global generated_bars
 
-    # generator = UnconditionalGenerator()
-    generator = MelodyConditionedGenerator()
+    generators = {
+        "unconditional": UnconditionalGenerator(),
+        "melody_conditioned": MelodyConditionedGenerator()
+    }
 
     while True:
         if len(generated_bars) < 3 and len(captured_notes.notes) > 5:
+            generator = generators[selected_generator]
             gen_start = time.time()
-            generated_bar = generator.generate_notes(captured_notes)
+            input_ns = truncate_ns_right(captured_notes, 30.0)
+            generated_bar = generator.generate_notes(input_ns)
             generated_bars.append(generated_bar)
             print(f"Spent {time.time() - gen_start} sec generating {len(generated_bar.notes)} notes. {len(generated_bars)} bars in queue.")
         time.sleep(0.1)
