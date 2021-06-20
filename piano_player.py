@@ -72,7 +72,7 @@ def start():
     captured_notes = music_pb2.NoteSequence()
     captured_notes.tempos.add(qpm=60)
 
-    generation_thread = Thread(target=generate_notes_loop_unconditional, args=())
+    generation_thread = Thread(target=generate_notes_loop, args=())
     generation_thread.start()
 
     playback_thread = Thread(target=play_selected_notes, args=())
@@ -104,6 +104,8 @@ def update():
         event_code, pitch, velocity, _ = event
 
         if 144 <= event_code < 160:
+            note_name = pretty_midi.note_number_to_name(pitch)
+            print(f"Received input {note_name}")
             # fs.noteon(event_code - 144, pitch, velocity)
             last_event_time += 100_000
             event_buffer.append(new_events[i])
@@ -136,7 +138,7 @@ class UnconditionalGenerator(object):
 
         model_name = 'transformer'
         hparams_set = 'transformer_tpu'
-        ckpt_path = '/Users/jjclark/Projects/music-generation/content/unconditional_model_16.ckpt'
+        ckpt_path = './content/unconditional_model_16.ckpt'
 
         class PianoPerformanceLanguageModelProblem(score2perf.Score2PerfProblem):
             @property
@@ -226,11 +228,88 @@ class UnconditionalGenerator(object):
         return generated_notes
 
 
-def generate_notes_loop_unconditional():
+class MelodyConditionedGenerator(object):
+    def __init__(self):
+        model_name = 'transformer'
+        hparams_set = 'transformer_tpu'
+        ckpt_path = './content/melody_conditioned_model_16.ckpt'
+
+        class MelodyToPianoPerformanceProblem(score2perf.AbsoluteMelody2PerfProblem):
+            @property
+            def add_eos_symbol(self):
+                return True
+
+        problem = MelodyToPianoPerformanceProblem()
+        self.melody_conditioned_encoders = problem.get_feature_encoders()
+
+        # Set up HParams.
+        hparams = trainer_lib.create_hparams(hparams_set=hparams_set)
+        trainer_lib.add_problem_hparams(hparams, problem)
+        hparams.num_hidden_layers = 16
+        hparams.sampling_method = 'random'
+
+        # Set up decoding HParams.
+        decode_hparams = decoding.decode_hparams()
+        decode_hparams.alpha = 0.0
+        decode_hparams.beam_size = 1
+
+        # Create Estimator.
+        run_config = trainer_lib.create_run_config(hparams)
+        estimator = trainer_lib.create_estimator(
+            model_name, hparams, run_config,
+            decode_hparams=decode_hparams)
+
+        # These values will be changed by the following cell.
+        self.inputs = []
+        self.decode_length = 256
+
+        # Create input generator.
+        def input_generator():
+            global inputs
+            while True:
+                yield {
+                    'inputs': np.array([[self.inputs]], dtype=np.int32),
+                    'targets': np.zeros([1, 0], dtype=np.int32),
+                    'decode_length': np.array(self.decode_length, dtype=np.int32)
+                }
+
+        # Start the Estimator, loading from the specified checkpoint.
+        input_fn = decoding.make_input_fn_from_generator(input_generator())
+        self.melody_conditioned_samples = estimator.predict(input_fn, checkpoint_path=ckpt_path)
+
+        # "Burn" one.
+        _ = next(self.melody_conditioned_samples)
+        print("Initialized neural net")
+
+    def decode(self, ids, encoder):
+        # Decode a list of IDs.
+        ids = list(ids)
+        if text_encoder.EOS_ID in ids:
+            ids = ids[:ids.index(text_encoder.EOS_ID)]
+        return encoder.decode(ids)
+
+    def generate_notes(self, melody_ns):
+        self.inputs = self.melody_conditioned_encoders['inputs'].encode_note_sequence(melody_ns)
+
+        # Generate sample events.
+        self.decode_length = 4096
+        sample_ids = next(self.melody_conditioned_samples)['outputs']
+
+        # Decode to NoteSequence.
+        midi_filename = self.decode(
+            sample_ids,
+            encoder=self.melody_conditioned_encoders['targets'])
+        accompaniment_ns = note_seq.midi_file_to_note_sequence(midi_filename)
+
+        return accompaniment_ns
+
+
+def generate_notes_loop():
     global captured_notes
     global generated_bars
 
-    generator = UnconditionalGenerator()
+    # generator = UnconditionalGenerator()
+    generator = MelodyConditionedGenerator()
 
     while True:
         if len(generated_bars) < 3 and len(captured_notes.notes) > 5:
@@ -274,6 +353,7 @@ def select_notes_to_play():
         return
 
     print(f"Playing {len(tmp_notes.notes)} generated notes. {len(generated_bars)} bars in queue")
+    process_captured_notes(tmp_notes)
 
     # if pygame.mixer.music.get_busy():
     #     pygame.mixer.music.stop()
