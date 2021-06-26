@@ -190,7 +190,7 @@ class UnconditionalGenerator(object):
 
         # "Burn" one.
         _ = next(self.unconditional_samples)
-        print("Initialized neural net")
+        print("Initialized unconditional neural net")
 
     def decode(self, ids, encoder):
         # Decode a list of IDs.
@@ -288,7 +288,7 @@ class MelodyConditionedGenerator(object):
 
         # "Burn" one.
         _ = next(self.melody_conditioned_samples)
-        print("Initialized neural net")
+        print("Initialized melody-conditioned neural net")
 
     def decode(self, ids, encoder):
         # Decode a list of IDs.
@@ -329,8 +329,11 @@ def generate_notes_loop():
             input_ns = truncate_ns_right(captured_notes, 30.0)
             generated_bar = generator.generate_notes(input_ns)
             generated_bars.append(generated_bar)
-            print(f"Spent {time.time() - gen_start} sec generating {len(generated_bar.notes)} notes. {len(generated_bars)} bars in queue.")
+            print(f"Spent {time.time() - gen_start:.2f} sec generating {len(generated_bar.notes)} notes. {len(generated_bars)} bars in queue.")
         time.sleep(0.1)
+
+
+auto_played_bars = 0
 
 
 def select_notes_to_play():
@@ -338,6 +341,7 @@ def select_notes_to_play():
     global generated_bars
     global generated_notes
     global last_event_time
+    global auto_played_bars
 
     if last_event_time == 0:
         return
@@ -352,18 +356,24 @@ def select_notes_to_play():
         return
 
     if idle_time > 15.0:
+        auto_played_bars = 0
         return
 
-    if is_currently_playing(generated_notes):
+    # don't interrupt a fresh bar
+    if is_currently_playing(generated_notes) and auto_played_bars > 0:
         return
 
     # Select the next bar to be played
     interrupt_ns(generated_notes)
     generated_notes = None
 
-    tmp_notes = generated_bars.popleft()
+    tmp_notes = generated_bars.pop()
     if tmp_notes is None:
         return
+    if auto_played_bars == 0:
+        generated_bars.clear()
+
+    auto_played_bars += 1
 
     print(f"Playing {len(tmp_notes.notes)} generated notes. {len(generated_bars)} bars in queue")
     process_captured_notes(tmp_notes)
