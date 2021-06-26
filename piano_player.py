@@ -1,3 +1,4 @@
+#!/usr/bin/env python3.7
 import time
 import fluidsynth
 import pygame.midi
@@ -30,8 +31,11 @@ fs = fluidsynth.Synth()
 
 last_event_time = 0
 
+
 generated_notes = None
 generated_bars = deque()
+selected_generator = "unconditional"
+
 
 class UnconditionalGenerator:
     targets = []
@@ -122,22 +126,12 @@ class UnconditionalGenerator:
         # return continuation ns
         return ns
 
-    def generate_notes(self):
+    def generate_notes(self, primer_ns):
         global captured_notes
         global last_event_time
         global generated_bars
 
-        if len(captured_notes.notes) < 5:
-            return
-
-        if len(generated_bars) > 3:
-            return
-
         print("generating notes")
-
-        process_captured_notes(captured_notes)
-
-        primer_ns = truncate_right_ns(captured_notes, 10)
 
         #primer_ns = captured_notes
 
@@ -146,6 +140,88 @@ class UnconditionalGenerator:
         total_time = time.time() - gen_start
 
         print(f"Generated {len(generated_bars)} bars which took {total_time} sec")    
+
+class MelodyConditionedGenerator:
+
+    def decode(self, ids, encoder):
+        ids = list(ids)
+        if text_encoder.EOS_ID in ids:
+            ids = ids[:ids.index(text_encoder.EOS_ID)]
+        return encoder.decode(ids)
+
+
+    def __init__(self):
+        model_name = 'transformer'
+        hparams_set = 'transformer_tpu'
+        ckpt_path = 'gs://magentadata/models/music_transformer/checkpoints/melody_conditioned_model_16.ckpt'
+
+        class MelodyToPianoPerformanceProblem(score2perf.AbsoluteMelody2PerfProblem):
+          @property
+          def add_eos_symbol(self):
+            return True
+
+        problem = MelodyToPianoPerformanceProblem()
+        self.melody_conditioned_encoders = problem.get_feature_encoders()
+
+        # Set up HParams.
+        hparams = trainer_lib.create_hparams(hparams_set=hparams_set)
+        trainer_lib.add_problem_hparams(hparams, problem)
+        hparams.num_hidden_layers = 16
+        hparams.sampling_method = 'random'
+
+        # Set up decoding HParams.
+        decode_hparams = decoding.decode_hparams()
+        decode_hparams.alpha = 0.0
+        decode_hparams.beam_size = 1
+
+        # Create Estimator.
+        run_config = trainer_lib.create_run_config(hparams)
+        estimator = trainer_lib.create_estimator(
+            model_name, hparams, run_config,
+            decode_hparams=decode_hparams)
+
+        # These values will be changed by the following cell.
+        self.inputs = []
+        self.decode_length = 0
+
+        # Create input generator.
+        def input_generator():
+          global inputs
+          while True:
+            yield {
+                'inputs': np.array([[self.inputs]], dtype=np.int32),
+                'targets': np.zeros([1, 0], dtype=np.int32),
+                'decode_length': np.array(self.decode_length, dtype=np.int32)
+            }
+
+        # Start the Estimator, loading from the specified checkpoint.
+        input_fn = decoding.make_input_fn_from_generator(input_generator())
+        self.melody_conditioned_samples = estimator.predict(
+            input_fn, checkpoint_path=ckpt_path)
+
+        # "Burn" one.
+        _ = next(self.melody_conditioned_samples)
+
+        print("melody conditioned generator initialised")
+
+    def generate_notes(self, melody_ns):
+        self.inputs = self.melody_conditioned_encoders['inputs'].encode_note_sequence(
+      melody_ns)
+
+
+        self.decode_length = 256
+        sample_ids = next(self.melody_conditioned_samples)['outputs']
+
+        # Decode to NoteSequence.
+        midi_filename = self.decode(
+            sample_ids,
+            encoder=self.melody_conditioned_encoders['targets'])
+        accompaniment_ns = note_seq.midi_file_to_note_sequence(midi_filename)
+
+        # Play and plot.
+        return accompaniment_ns
+
+
 
 
 
@@ -197,6 +273,7 @@ def update():
     global captured_notes
     global fs
     global midi_in
+    global selected_generator
 
     new_events = midi_in.read(100)
 
@@ -204,16 +281,18 @@ def update():
     if len(new_events) > 0:
         print(len(new_events), " new events", len(event_buffer))   
 
+
     for i in range(len(new_events)):
         event,timestamp = new_events[i]
         last_event_time = timestamp
         event_code, pitch, velocity, _ = event
+        #print(event)
         if 144 <= event_code < 160:
             fs.noteon(event_code - 144, pitch, velocity)
 
             last_event_time += 10000
             event_buffer.append(new_events[i])
-        if 128 <= event_code < 144:
+        elif 128 <= event_code < 144:
             fs.noteoff(event_code - 128, pitch)
             start_code = event_code + 16
             for j in range (len(event_buffer)):
@@ -229,6 +308,13 @@ def update():
                     event_buffer.remove(event_buffer[j])
                     break
 
+        elif 160 <= event_code < 176:
+            if pitch == 36:
+                selected_generator = "unconditional"
+            elif pitch == 38:
+                selected_generator = "melody_conditioned"
+
+
     select_notes_to_play()
     time.sleep(0.01)
 
@@ -239,9 +325,24 @@ def update():
 
 
 def generate_notes_loop_unconditional(fs):
-    generator = UnconditionalGenerator()
+    generators = {
+        "unconditional" : UnconditionalGenerator(),
+        "melody_conditioned" : MelodyConditionedGenerator()
+        }
+
+
     while True:
-        generator.generate_notes()
+        if len(captured_notes.notes) < 5:
+            continue
+
+        if len(generated_bars) > 3:
+            continue
+
+        print("using generator " + selected_generator)
+        generator = generators[selected_generator]
+        input_ns = truncate_right_ns(captured_notes, 30.0)
+        generated_bar = generator.generate_notes(input_ns)
+        generated_bars.append(generated_bar)
         time.sleep(0.1)
 
 
@@ -254,8 +355,6 @@ def select_notes_to_play():
     if len(generated_bars) == 0:
         return
 
-    if generated_notes != None:
-        interrupt_playing(generated_notes)
 
     idle_time = pygame.midi.time() - last_event_time
 
@@ -267,12 +366,16 @@ def select_notes_to_play():
         return
     if is_currently_playing(generated_notes):
         return
+    if generated_notes != None:
+        interrupt_playing(generated_notes)
 
     generated_notes = generated_bars.popleft()
 
     captured_time = max(pygame.midi.time() / 1000, captured_notes.total_time)
 
     generated_notes = note_seq.concatenate_sequences([captured_notes, generated_notes],[captured_time, generated_notes.total_time])
+
+    print(f"Now Playing...{len(generated_notes.notes)}")
 
 def interrupt_playing(ns):
     global fs
@@ -312,6 +415,9 @@ def truncate_left_ns(ns, end_time):
             ns.notes.remove(note)
 
 def truncate_right_ns(ns, time_from_end):
+    if len(ns.notes) == 0:
+        return ns
+
     end_time = max(note.end_time for note in ns.notes)
     cutoff = end_time - time_from_end
     new_ns = music_pb2.NoteSequence()
