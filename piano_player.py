@@ -6,22 +6,10 @@ from note_seq.protobuf import music_pb2
 import threading
 from collections import deque
 
-import numpy as np
-import os
-import tensorflow.compat.v1 as tf
-
 #from google.colab import files
 
-from tensor2tensor import models
-from tensor2tensor import problems
-from tensor2tensor.data_generators import text_encoder
-from tensor2tensor.utils import decoding
-from tensor2tensor.utils import trainer_lib
-
-from magenta.models.score2perf import score2perf
 import note_seq
-
-tf.disable_v2_behavior()
+import requests
 
 event_buffer = deque()
 
@@ -35,195 +23,6 @@ last_event_time = 0
 generated_notes = None
 generated_bars = deque()
 selected_generator = "unconditional"
-
-
-class UnconditionalGenerator:
-    targets = []
-    decode_length = 0
-
-    def decode(self, ids, encoder):
-        ids = list(ids)
-        if text_encoder.EOS_ID in ids:
-            ids = ids[:ids.index(text_encoder.EOS_ID)]
-        return encoder.decode(ids)
-
-    def __init__(self):
-        #@title Setup and Load Checkpoint
-        #@markdown Set up generation from an unconditional Transformer
-        #@markdown model.
-
-        model_name = 'transformer'
-        hparams_set = 'transformer_tpu'
-        ckpt_path = './content/unconditional_model_16.ckpt'
-        #ckpt_path = 'gs://magentadata/models/music_transformer/checkpoints/unconditional_model_16.ckpt'
-
-        class PianoPerformanceLanguageModelProblem(score2perf.Score2PerfProblem):
-          @property
-          def add_eos_symbol(self):
-            return True
-
-        problem = PianoPerformanceLanguageModelProblem()
-        self.unconditional_encoders = problem.get_feature_encoders()
-
-        # Set up HParams.
-        hparams = trainer_lib.create_hparams(hparams_set=hparams_set)
-        trainer_lib.add_problem_hparams(hparams, problem)
-        hparams.num_hidden_layers = 16
-        hparams.sampling_method = 'random'
-
-        # Set up decoding HParams.
-        decode_hparams = decoding.decode_hparams()
-        decode_hparams.alpha = 0.0
-        decode_hparams.beam_size = 1
-
-        # Create Estimator.
-        run_config = trainer_lib.create_run_config(hparams)
-        estimator = trainer_lib.create_estimator(
-            model_name, hparams, run_config,
-            decode_hparams=decode_hparams)
-
-        # Create input generator (so we can adjust priming and
-        # decode length on the fly).
-        def input_generator():
-            while True:
-                yield {
-                    'targets': np.array([self.targets], dtype=np.int32),
-                    'decode_length': np.array(self.decode_length, dtype=np.int32)
-                }
-
-
-        # Start the Estimator, loading from the specified checkpoint.
-        input_fn = decoding.make_input_fn_from_generator(input_generator())
-        self.unconditional_samples = estimator.predict(
-            input_fn, checkpoint_path=ckpt_path)
-
-        # "Burn" one.
-        _ = next(self.unconditional_samples)
-
-        print("UnconditionalGenerator init finished")
-
-    def continuation(self, primer_ns):
-        #@title Generate Continuation
-        #@markdown Continue a piano performance, starting with the
-        #@markdown chosen priming sequence.
-
-        self.targets = self.unconditional_encoders['targets'].encode_note_sequence(primer_ns)
-
-        # Remove the end token from the encoded primer.
-        self.targets = self.targets[:-1]
-
-        self.decode_length = 64
-
-        # Generate sample events.
-        sample_ids = next(self.unconditional_samples)['outputs']
-
-        # Decode to NoteSequence.
-        midi_filename = self.decode(
-            sample_ids,
-            encoder=self.unconditional_encoders['targets'])
-        ns = note_seq.midi_file_to_note_sequence(midi_filename)
-
-        # return continuation ns
-        return ns
-
-    def generate_notes(self, primer_ns):
-        global captured_notes
-        global last_event_time
-        global generated_bars
-
-        print("generating notes")
-
-        #primer_ns = captured_notes
-
-        gen_start = time.time()
-        generated_bars.append(self.continuation(primer_ns))
-        total_time = time.time() - gen_start
-
-        print(f"Generated {len(generated_bars)} bars which took {total_time} sec")    
-
-class MelodyConditionedGenerator:
-
-    def decode(self, ids, encoder):
-        ids = list(ids)
-        if text_encoder.EOS_ID in ids:
-            ids = ids[:ids.index(text_encoder.EOS_ID)]
-        return encoder.decode(ids)
-
-
-    def __init__(self):
-        model_name = 'transformer'
-        hparams_set = 'transformer_tpu'
-        ckpt_path = 'gs://magentadata/models/music_transformer/checkpoints/melody_conditioned_model_16.ckpt'
-
-        class MelodyToPianoPerformanceProblem(score2perf.AbsoluteMelody2PerfProblem):
-          @property
-          def add_eos_symbol(self):
-            return True
-
-        problem = MelodyToPianoPerformanceProblem()
-        self.melody_conditioned_encoders = problem.get_feature_encoders()
-
-        # Set up HParams.
-        hparams = trainer_lib.create_hparams(hparams_set=hparams_set)
-        trainer_lib.add_problem_hparams(hparams, problem)
-        hparams.num_hidden_layers = 16
-        hparams.sampling_method = 'random'
-
-        # Set up decoding HParams.
-        decode_hparams = decoding.decode_hparams()
-        decode_hparams.alpha = 0.0
-        decode_hparams.beam_size = 1
-
-        # Create Estimator.
-        run_config = trainer_lib.create_run_config(hparams)
-        estimator = trainer_lib.create_estimator(
-            model_name, hparams, run_config,
-            decode_hparams=decode_hparams)
-
-        # These values will be changed by the following cell.
-        self.inputs = []
-        self.decode_length = 0
-
-        # Create input generator.
-        def input_generator():
-          global inputs
-          while True:
-            yield {
-                'inputs': np.array([[self.inputs]], dtype=np.int32),
-                'targets': np.zeros([1, 0], dtype=np.int32),
-                'decode_length': np.array(self.decode_length, dtype=np.int32)
-            }
-
-        # Start the Estimator, loading from the specified checkpoint.
-        input_fn = decoding.make_input_fn_from_generator(input_generator())
-        self.melody_conditioned_samples = estimator.predict(
-            input_fn, checkpoint_path=ckpt_path)
-
-        # "Burn" one.
-        _ = next(self.melody_conditioned_samples)
-
-        print("melody conditioned generator initialised")
-
-    def generate_notes(self, melody_ns):
-        self.inputs = self.melody_conditioned_encoders['inputs'].encode_note_sequence(
-      melody_ns)
-
-
-        self.decode_length = 256
-        sample_ids = next(self.melody_conditioned_samples)['outputs']
-
-        # Decode to NoteSequence.
-        midi_filename = self.decode(
-            sample_ids,
-            encoder=self.melody_conditioned_encoders['targets'])
-        accompaniment_ns = note_seq.midi_file_to_note_sequence(midi_filename)
-
-        # Play and plot.
-        return accompaniment_ns
-
-
-
-
 
 
 def main():
@@ -326,8 +125,8 @@ def update():
 
 def generate_notes_loop_unconditional(fs):
     generators = {
-        "unconditional" : UnconditionalGenerator(),
-        "melody_conditioned" : MelodyConditionedGenerator()
+        "unconditional" : '/generate_unconditional',
+        "melody_conditioned" : '/generate_melody_conditioned'
         }
 
 
@@ -341,9 +140,24 @@ def generate_notes_loop_unconditional(fs):
         print("using generator " + selected_generator)
         generator = generators[selected_generator]
         input_ns = truncate_right_ns(captured_notes, 30.0)
-        generated_bar = generator.generate_notes(input_ns)
+        generated_bar = generate_from_server(generator, input_ns)
         generated_bars.append(generated_bar)
         time.sleep(0.1)
+
+
+def generate_from_server(api, input_ns):
+    captured_notes_path = "captured_notes.mid"
+    note_seq.note_sequence_to_midi_file(input_ns, captured_notes_path)
+
+    url = 'http://localhost:5000'+api
+    files = {'file': open(captured_notes_path, 'rb')}
+    r = requests.post(url,files=files)
+
+    response_notes_path = "generate_notes.mid"
+    with open(response_notes_path, 'wb') as f:
+        f.write(r.content)
+    response_notes = note_seq.midi_file_to_note_sequence(response_notes_path)
+    return response_notes
 
 
 
