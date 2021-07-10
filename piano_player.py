@@ -27,12 +27,18 @@ selected_generator = "unconditional"
 midi_in = None
 midi_out = None
 
+STOPPING = False
 
 def main():
+    global STOPPING
     start()
-    while True:
-        update()
-        time.sleep(0.01)
+    try:
+        while True:
+            update()
+            time.sleep(0.01)
+    except KeyboardInterrupt:
+        STOPPING = True
+        time.sleep(0.1)
     stop()
 
 
@@ -81,7 +87,6 @@ def update():
     global last_event_time
     global fs
     global midi_in
-    global selected_generator
 
     new_events = midi_in.read(100)
     # if len(new_events) > 0:
@@ -117,35 +122,52 @@ def update():
 
         elif 192 <= event_code < 208:
             _, program_no, _, _ = event
-            if program_no == 0:
-                selected_generator = "unconditional"
-                print("Selected unconditional generator")
-            elif program_no == 2:
-                selected_generator = "melody_conditioned"
-                print("Selected accompaniment generator")
+            if program_no == 1:
+                change_selected_generator("quiet")
+            if program_no == 2:
+                change_selected_generator("identical")
+            if program_no == 3:
+                change_selected_generator("unconditional")
+            elif program_no == 4:
+                change_selected_generator("melody_conditioned")
 
     select_notes_to_play()
     time.sleep(0.01)
 
+
+def change_selected_generator(new_selection):
+    global selected_generator
+    if new_selection != selected_generator:
+        selected_generator = new_selection
+    generated_bars.clear()
+    print(f"Selected {new_selection} generator")
 
 def generate_notes_loop():
     global captured_notes
     global generated_bars
 
     generators = {
+        "quiet": None,
+        "identical": "/generate_unchanged",
         "unconditional": "/generate_unconditional",
-        "melody_conditioned": "/generate_melody_conditioned"
     }
 
     while True:
-        if len(generated_bars) < 3 and len(captured_notes.notes) > 5:
-            generator = generators[selected_generator]
-            gen_start = time.time()
-            input_ns = truncate_ns_right(captured_notes, 30.0)
-            generated_bar = generate_from_server(generator, input_ns)
-            generated_bars.append(generated_bar)
-            print(f"Spent {time.time() - gen_start:.2f} sec generating {len(generated_bar.notes)} notes. {len(generated_bars)} bars in queue.")
+        if STOPPING:
+            return
         time.sleep(0.1)
+        if len(captured_notes.notes) < 6:
+            continue
+        if len(generated_bars) >= 3:
+            continue
+        generator = generators[selected_generator]
+        if generator is None:
+            continue
+        gen_start = time.time()
+        input_ns = truncate_ns_right(captured_notes, 30.0)
+        generated_bar = generate_from_server(generator, input_ns)
+        generated_bars.append(generated_bar)
+        print(f"Spent {time.time() - gen_start:.2f} sec generating {len(generated_bar.notes)} notes. {len(generated_bars)} bars in queue.")
 
 
 def generate_from_server(api, input_ns):
@@ -170,7 +192,6 @@ def select_notes_to_play():
     global captured_notes
     global generated_bars
     global generated_notes
-    global last_event_time
     global auto_played_bars
 
     if last_event_time == 0:
@@ -251,6 +272,8 @@ def play_selected_notes():
 
     last_played_time = 0
     while True:
+        if STOPPING:
+            return
         now = pygame.midi.time() / 1000
         if generated_notes is not None:
             for note in generated_notes.notes:
