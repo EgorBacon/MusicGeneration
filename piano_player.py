@@ -109,9 +109,14 @@ def update():
 
         elif 160 <= event_code < 176:
             if pitch == 36:
-                selected_generator = "unconditional"
+                change_selected_generator("unchanged")
             elif pitch == 38:
-                selected_generator = "melody_conditioned"
+                change_selected_generator("quiet")
+            elif pitch == 42:
+                change_selected_generator("unconditional")
+            elif pitch == 46:
+                change_selected_generator("melody_conditioned")
+
 
 
     select_notes_to_play()
@@ -125,8 +130,10 @@ def update():
 
 def generate_notes_loop_unconditional(fs):
     generators = {
+        "unchanged": '/generate_unchanged',
+        "quiet": None,
         "unconditional" : '/generate_unconditional',
-        "melody_conditioned" : '/generate_melody_conditioned'
+        "melody_conditioned" : '/generate_melody_conditioned',
         }
 
 
@@ -137,11 +144,13 @@ def generate_notes_loop_unconditional(fs):
         if len(generated_bars) > 3:
             continue
 
-        print("using generator " + selected_generator)
+
         generator = generators[selected_generator]
-        input_ns = truncate_right_ns(captured_notes, 30.0)
-        generated_bar = generate_from_server(generator, input_ns)
-        generated_bars.append(generated_bar)
+        if generator:
+            input_ns = truncate_right_ns(captured_notes, 30.0)
+            generated_bar = generate_from_server(generator, input_ns)
+            generated_bars.append(generated_bar)
+
         time.sleep(0.1)
 
 
@@ -149,7 +158,7 @@ def generate_from_server(api, input_ns):
     captured_notes_path = "captured_notes.mid"
     note_seq.note_sequence_to_midi_file(input_ns, captured_notes_path)
 
-    url = 'http://localhost:5000'+api
+    url = 'http://localhost:5050'+api
     files = {'file': open(captured_notes_path, 'rb')}
     r = requests.post(url,files=files)
 
@@ -159,6 +168,13 @@ def generate_from_server(api, input_ns):
     response_notes = note_seq.midi_file_to_note_sequence(response_notes_path)
     return response_notes
 
+def change_selected_generator(new_selection):
+    global selected_generator
+    generated_bars.clear()
+    print(f"cleared bars {len(generated_bars)}")
+    if selected_generator != new_selection:
+        selected_generator = new_selection
+        print("using generator " + selected_generator)
 
 
 def select_notes_to_play():
@@ -176,6 +192,8 @@ def select_notes_to_play():
         interrupt_playing(generated_notes)
         generated_notes = None
         return
+    if idle_time <3000 and selected_generator == "melody_conditioned":
+        return
     if idle_time > 15000:
         return
     if is_currently_playing(generated_notes):
@@ -183,7 +201,7 @@ def select_notes_to_play():
     if generated_notes != None:
         interrupt_playing(generated_notes)
 
-    generated_notes = generated_bars.popleft()
+    generated_notes = generated_bars.pop()
 
     captured_time = max(pygame.midi.time() / 1000, captured_notes.total_time)
 

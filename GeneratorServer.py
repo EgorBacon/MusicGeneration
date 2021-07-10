@@ -3,7 +3,7 @@
 import os
 from flask import Flask, request, redirect, send_from_directory
 from werkzeug.utils import secure_filename
-from Generators import UnconditionalGenerator, MelodyConditionedGenerator
+from Generators import UnconditionalGenerator, MelodyConditionedGenerator, PerfomanceWithDynamicsGenerator
 import note_seq
 
 def create_app(test_config=None):
@@ -37,6 +37,13 @@ def create_app(test_config=None):
         <form action="/generate_melody_conditioned" method="post" enctype="multipart/form-data">
           <fieldset>
             <legend>Generate Accompaniment</legend>
+            <input type="file" name="file">
+            <input type="submit" value="Upload">
+          </fieldset>
+        </form>
+        <form action="/generate_performance" method="post" enctype="multipart/form-data">
+          <fieldset>
+            <legend>Generate Performance with Dynamics</legend>
             <input type="file" name="file">
             <input type="submit" value="Upload">
           </fieldset>
@@ -91,8 +98,27 @@ def create_app(test_config=None):
 
         return send_from_directory(app.config['UPLOAD_FOLDER'], "generated_notes.mid")
 
+    pd_generator = PerfomanceWithDynamicsGenerator
+
+    @app.route('/generate_performance', methods=['POST'])
+    def generate_performance():
+        file = request.files['file']
+        if file.filename == '':
+            # empty file
+            return redirect("/")
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        generated_path = os.path.join(app.config['UPLOAD_FOLDER'], "generated_notes.mid")
+
+        captured_notes = note_seq.midi_file_to_note_sequence(file_path)
+        generated_notes = pd_generator.generate_notes(captured_notes)
+        note_seq.note_sequence_to_midi_file(generated_notes, generated_path)
+
+        return send_from_directory(app.config['UPLOAD_FOLDER'], "generated_notes.mid")
+
     return app
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5050)

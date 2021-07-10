@@ -5,6 +5,11 @@ import numpy as np
 from magenta.models.score2perf import score2perf
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.utils import trainer_lib, decoding
+import os
+from magenta.models.performance_rnn import performance_sequence_generator
+from magenta.models.shared import sequence_generator_bundle
+from note_seq.protobuf import generator_pb2
+from note_seq.protobuf import music_pb2
 
 import tensorflow.compat.v1 as tf
 
@@ -182,3 +187,24 @@ class MelodyConditionedGenerator:
 
         # Play and plot.
         return accompaniment_ns
+
+
+class PerfomanceWithDynamicsGenerator:
+
+    def __init__(self):
+        MODEL_NAME = 'performance_with_dynamics'
+        BUNDLE_NAME = MODEL_NAME + '.mag'
+
+        bundle = sequence_generator_bundle.read_bundle_file(os.path.join('./content', BUNDLE_NAME))
+        generator_map = performance_sequence_generator.get_generator_map()
+        self.generator = generator_map[MODEL_NAME](checkpoint=None, bundle=bundle)
+        self.generator.initialize()
+
+
+    def generate_notes(self, melody_ns):
+        generator_options = generator_pb2.GeneratorOptions()
+        generator_options.args['temperature'].float_value = 1.0  # Higher is more random; 1.0 is default.
+        generate_section = generator_options.generate_sections.add(start_time=0, end_time=30)
+        sequence = self.generator.generate(music_pb2.NoteSequence(), generator_options)
+
+        return sequence
