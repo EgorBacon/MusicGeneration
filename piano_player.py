@@ -130,6 +130,8 @@ def update():
                 change_selected_generator("unconditional")
             elif program_no == 4:
                 change_selected_generator("melody_conditioned")
+            elif program_no == 5:
+                change_selected_generator("performance")
 
     select_notes_to_play()
     time.sleep(0.01)
@@ -150,6 +152,8 @@ def generate_notes_loop():
         "quiet": None,
         "identical": "/generate_unchanged",
         "unconditional": "/generate_unconditional",
+        "melody_conditioned": "/generate_melody_conditioned",
+        "performance": "/generate_performance"
     }
 
     while True:

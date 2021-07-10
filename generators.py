@@ -1,11 +1,17 @@
 import note_seq
 import numpy as np
-from magenta.models.score2perf import score2perf
-from tensor2tensor.data_generators import text_encoder
-from tensor2tensor.utils import trainer_lib, decoding
 
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
+
+from magenta.models.score2perf import score2perf
+from magenta.models.performance_rnn import performance_sequence_generator
+from magenta.models.shared import sequence_generator_bundle
+from note_seq.protobuf import generator_pb2
+from note_seq.protobuf import music_pb2
+
+from tensor2tensor.data_generators import text_encoder
+from tensor2tensor.utils import trainer_lib, decoding
 
 
 class UnconditionalGenerator(object):
@@ -178,3 +184,22 @@ class MelodyConditionedGenerator(object):
         accompaniment_ns = note_seq.midi_file_to_note_sequence(midi_filename)
 
         return accompaniment_ns
+
+class PerformanceGenerator(object):
+    def __init__(self):
+        self.MODEL_NAME = 'performance_with_dynamics'
+        self.BUNDLE_NAME = self.MODEL_NAME + '.mag'
+
+        bundle = sequence_generator_bundle.read_bundle_file('./content/'+self.BUNDLE_NAME)
+        generator_map = performance_sequence_generator.get_generator_map()
+        self.generator = generator_map[self.MODEL_NAME](checkpoint=None, bundle=bundle)
+        self.generator.initialize()
+        print("Initialized Performance with Dynamics")
+
+    def generate_notes(self, melody_ns):
+        generator_options = generator_pb2.GeneratorOptions()
+        generator_options.args['temperature'].float_value = 1.0  # Higher is more random; 1.0 is default.
+        generate_section = generator_options.generate_sections.add(start_time=0, end_time=30)
+        sequence = self.generator.generate(music_pb2.NoteSequence(), generator_options)
+
+        return sequence
