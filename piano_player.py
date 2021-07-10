@@ -206,6 +206,9 @@ def select_notes_to_play():
         generated_notes = None
         return
 
+    if idle_time < 3.50 and selected_generator == 'melody_conditioned':
+        return
+
     if idle_time > 15.0:
         auto_played_bars = 0
         return
