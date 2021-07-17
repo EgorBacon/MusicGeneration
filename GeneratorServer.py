@@ -3,7 +3,7 @@
 import os
 from flask import Flask, request, redirect, send_from_directory
 from werkzeug.utils import secure_filename
-from Generators import UnconditionalGenerator, MelodyConditionedGenerator, PerfomanceWithDynamicsGenerator
+from Generators import UnconditionalGenerator, MelodyConditionedGenerator
 import note_seq
 
 def create_app(test_config=None):
@@ -37,13 +37,6 @@ def create_app(test_config=None):
         <form action="/generate_melody_conditioned" method="post" enctype="multipart/form-data">
           <fieldset>
             <legend>Generate Accompaniment</legend>
-            <input type="file" name="file">
-            <input type="submit" value="Upload">
-          </fieldset>
-        </form>
-        <form action="/generate_performance" method="post" enctype="multipart/form-data">
-          <fieldset>
-            <legend>Generate Performance with Dynamics</legend>
             <input type="file" name="file">
             <input type="submit" value="Upload">
           </fieldset>
@@ -97,10 +90,10 @@ def create_app(test_config=None):
         note_seq.note_sequence_to_midi_file(generated_notes, generated_path)
 
         return send_from_directory(app.config['UPLOAD_FOLDER'], "generated_notes.mid")
+    return app
+    #pd_generator = PerfomanceWithDynamicsGenerator
 
-    pd_generator = PerfomanceWithDynamicsGenerator
-
-    @app.route('/generate_performance', methods=['POST'])
+"""  @app.route('/generate_performance', methods=['POST'])
     def generate_performance():
         file = request.files['file']
         if file.filename == '':
@@ -118,6 +111,7 @@ def create_app(test_config=None):
         return send_from_directory(app.config['UPLOAD_FOLDER'], "generated_notes.mid")
 
     return app
+"""
 
 if __name__ == '__main__':
     app = create_app()

@@ -1,4 +1,7 @@
 import time
+import tensorflow.compat.v1 as tf
+
+tf.disable_v2_behavior()
 
 import note_seq
 import numpy as np
@@ -6,14 +9,11 @@ from magenta.models.score2perf import score2perf
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.utils import trainer_lib, decoding
 import os
-from magenta.models.performance_rnn import performance_sequence_generator
-from magenta.models.shared import sequence_generator_bundle
-from note_seq.protobuf import generator_pb2
-from note_seq.protobuf import music_pb2
+#from magenta.models.performance_rnn import performance_sequence_generator
+#from magenta.models.shared import sequence_generator_bundle
+#from note_seq.protobuf import generator_pb2
+#from note_seq.protobuf import music_pb2
 
-import tensorflow.compat.v1 as tf
-
-tf.disable_v2_behavior()
 
 class UnconditionalGenerator:
     targets = []
@@ -189,7 +189,7 @@ class MelodyConditionedGenerator:
         return accompaniment_ns
 
 
-class PerfomanceWithDynamicsGenerator:
+"""class PerfomanceWithDynamicsGenerator:
 
     def __init__(self):
         MODEL_NAME = 'performance_with_dynamics'
@@ -208,3 +208,4 @@ class PerfomanceWithDynamicsGenerator:
         sequence = self.generator.generate(music_pb2.NoteSequence(), generator_options)
 
         return sequence
+"""
