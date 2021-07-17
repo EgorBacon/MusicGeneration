@@ -11,7 +11,15 @@ For this project you need three things:
    ```bash
    pip install -r requirements.txt
    ```
-2. Run the `Launcher.sh` in terminal with
+   
+2. Please install the required neural net files
+   ```bash
+    cd content
+    gsutil -m cp -r 'gs://magentadata/models/music_transformer/checkpoints/*' .
+    gsutil -q -m cp -r 'gs://magentadata/models/music_transformer/primers/*' .
+    gsutil -q -m cp 'gs://magentadata/soundfonts/Yamaha-C5-Salamander-JNv5.1.sf2' .
+    ```
+3. Run the `Launcher.sh` in terminal with
     ```bash
     ./Launcher.sh 
     ```
