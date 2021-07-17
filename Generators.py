@@ -5,7 +5,7 @@ tf.disable_v2_behavior()
 
 import note_seq
 import numpy as np
-from magenta.models.score2perf import score2perf
+from score2perf import score2perf
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.utils import trainer_lib, decoding
 import os
