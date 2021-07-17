@@ -10,6 +10,15 @@ Use `pip` or `conda` to install the dependencies:
 pip install -r requirements.txt
 ```
 
+Download the neural net files
+
+```bash
+cd content
+gsutil -m cp -r 'gs://magentadata/models/music_transformer/checkpoints/*' .
+gsutil -q -m cp -r 'gs://magentadata/models/music_transformer/primers/*' .
+gsutil -q -m cp 'gs://magentadata/soundfonts/Yamaha-C5-Salamander-JNv5.1.sf2' .
+```
+
 ### Operation
 
 Run the generation server and give it a minute to start:
@@ -24,13 +33,13 @@ python piano_player.py
 
 ### Usage
 
-Play the instrument and the program will read its MIDI output and send notes to its MIDI input.
+Play the instrument, and the program will read its MIDI output and send notes to its MIDI input.
 
 Change the mode by pressing the corresponding MIDI Program button:
 
 1: Quiet: Generate nothing.
 
-2: Identical: Generate a copy of what was played. Useful for Debugging.
+2: Identical: Generate a copy of what was played. Useful for debugging.
 
 3: Continuation: Generate new notes by using the input as a primer.
 
