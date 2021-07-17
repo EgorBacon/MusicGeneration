@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+
+# prevent unneeded import which has platform incompatibilities
+import sys
+sys.modules['note_seq.audio_io'] = {}
+
 import numpy as np
 from note_seq.midi_io import midi_file_to_note_sequence
 from magenta.models.score2perf import score2perf

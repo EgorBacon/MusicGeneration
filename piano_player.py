@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+# prevent unneeded import which has platform incompatibilities
+import sys
+sys.modules['note_seq.audio_io'] = {}
+
 import time
 import pygame.midi
 import pygame.mixer
