@@ -3,7 +3,8 @@
 import time
 import pygame.midi
 import pygame.mixer
-import note_seq
+from note_seq.midi_io import note_sequence_to_midi_file, midi_file_to_note_sequence
+from note_seq.sequences_lib import concatenate_sequences
 from note_seq.protobuf import music_pb2
 import fluidsynth
 from collections import deque
@@ -172,7 +173,7 @@ def generate_notes_loop():
 
 def generate_from_server(api, input_ns):
     captured_notes_path = "captured_notes.mid"
-    note_seq.note_sequence_to_midi_file(input_ns, captured_notes_path)
+    note_sequence_to_midi_file(input_ns, captured_notes_path)
 
     url = 'http://localhost:5000'+api
     files = {'file': open(captured_notes_path, 'rb')}
@@ -181,7 +182,7 @@ def generate_from_server(api, input_ns):
     response_notes_path = "generated_notes.mid"
     with open(response_notes_path, 'wb') as f:
         f.write(r.content)
-    response_notes = note_seq.midi_file_to_note_sequence(response_notes_path)
+    response_notes = midi_file_to_note_sequence(response_notes_path)
     return response_notes
 
 
@@ -236,11 +237,11 @@ def select_notes_to_play():
     #     pygame.mixer.music.stop()
 
     captured_time = max(captured_notes.total_time, pygame.midi.time() / 1000)
-    generated_notes = note_seq.concatenate_sequences(
+    generated_notes = concatenate_sequences(
         [captured_notes, tmp_notes],
         [captured_time, tmp_notes.total_time])
 
-    # note_seq.note_sequence_to_midi_file(generated_notes, "generated_notes.mid")
+    # note_sequence_to_midi_file(generated_notes, "generated_notes.mid")
     # pygame.mixer.music.load("generated_notes.mid")
     # pygame.mixer.music.play()
     # last_event_time += pygame.midi.time() + generated_notes.total_time * 1000

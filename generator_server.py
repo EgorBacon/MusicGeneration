@@ -4,7 +4,7 @@ import os
 from flask import Flask, request, redirect, send_from_directory, send_file
 from werkzeug.utils import secure_filename
 from generators import UnconditionalGenerator, MelodyConditionedGenerator
-import note_seq
+from note_seq.midi_io import note_sequence_to_midi_file, midi_file_to_note_sequence
 from datetime import datetime
 
 def stamped_filename(filename):
@@ -72,9 +72,9 @@ def create_app(test_config=None):
         file.save(file_path)
 
         generated_path = os.path.join(app.config['UPLOAD_FOLDER'], stamped_filename("generated_notes.mid"))
-        captured_notes = note_seq.midi_file_to_note_sequence(file_path)
+        captured_notes = midi_file_to_note_sequence(file_path)
         generated_notes = uc_generator.generate_notes(captured_notes)
-        note_seq.note_sequence_to_midi_file(generated_notes, generated_path)
+        note_sequence_to_midi_file(generated_notes, generated_path)
 
         return send_file(generated_path)
 
@@ -91,9 +91,9 @@ def create_app(test_config=None):
         file.save(file_path)
 
         generated_path = os.path.join(app.config['UPLOAD_FOLDER'], stamped_filename("generated_notes.mid"))
-        captured_notes = note_seq.midi_file_to_note_sequence(file_path)
+        captured_notes = midi_file_to_note_sequence(file_path)
         generated_notes = mc_generator.generate_notes(captured_notes)
-        note_seq.note_sequence_to_midi_file(generated_notes, generated_path)
+        note_sequence_to_midi_file(generated_notes, generated_path)
 
         return send_file(generated_path)
 

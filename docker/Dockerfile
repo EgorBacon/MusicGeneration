@@ -103,10 +103,14 @@ RUN pip3 install -U pyfluidsynth
 #RUN pip3 install -U google-cloud
 # RUN pip3 install -U gstuil
 #RUN pip3 install -U magenta
-
+RUN pip3 install --no-dependencies tensor2tensor
 #ADD assets /
+RUN pip3 install flask~=2.0.0 werkzeug~=2.0.1
+RUN pip3 install pretty_midi
+RUN pip3 install --no-dependencies magenta
+RUN pip3 install --no-dependencies note_seq
 
-ADD requirements.txt /app/requirements.txt
-RUN pip3 install -r /app/requirements.txt
+#ADD requirements.txt /app/requirements.txt
+#RUN pip3 install -r /app/requirements.txt
 
 #CMD jupyter notebook --allow-root

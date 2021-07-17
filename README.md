@@ -19,6 +19,13 @@ gsutil -q -m cp -r 'gs://magentadata/models/music_transformer/primers/*' .
 gsutil -q -m cp 'gs://magentadata/soundfonts/Yamaha-C5-Salamander-JNv5.1.sf2' .
 ```
 
+Optional: build the Docker image
+
+```bash
+docker build -t music-generation docker
+docker run --rm -it --runtime nvidia --network host -v "$PWD:/app" -w /app music-generation
+```
+
 ### Operation
 
 Run the generation server and give it a minute to start:

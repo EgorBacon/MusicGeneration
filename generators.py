@@ -1,6 +1,6 @@
-import note_seq
 import numpy as np
-from score2perf import score2perf
+from note_seq.midi_io import midi_file_to_note_sequence
+from magenta.models.score2perf import score2perf
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.utils import trainer_lib, decoding
 
@@ -88,10 +88,10 @@ class UnconditionalGenerator(object):
         midi_filename = self.decode(
             sample_ids,
             encoder=self.unconditional_encoders['targets'])
-        ns = note_seq.midi_file_to_note_sequence(midi_filename)
+        ns = midi_file_to_note_sequence(midi_filename)
 
         # Append continuation to primer.
-        # continuation_ns = note_seq.concatenate_sequences([primer_ns, ns])
+        # continuation_ns = concatenate_sequences([primer_ns, ns])
 
         return ns
 
@@ -175,6 +175,6 @@ class MelodyConditionedGenerator(object):
         midi_filename = self.decode(
             sample_ids,
             encoder=self.melody_conditioned_encoders['targets'])
-        accompaniment_ns = note_seq.midi_file_to_note_sequence(midi_filename)
+        accompaniment_ns = midi_file_to_note_sequence(midi_filename)
 
         return accompaniment_ns
