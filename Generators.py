@@ -14,9 +14,12 @@ def import_submodule(module_name):
     parts = module_name.split(".")
     package_name = parts[0]
     magenta_spec = importlib.util.find_spec(package_name)
-    sys.modules[package_name] = {}
-    score2perf_path = Path(magenta_spec.submodule_search_locations[0])/Path(*parts[1:])/"__init__.py"
-
+    sys.modules[package_name] = importlib.util.module_from_spec(magenta_spec)
+    score2perf_path = Path(magenta_spec.submodule_search_locations[0])/Path(*parts[1:]) #/"__init__.py"
+    if score2perf_path.is_dir():
+        score2perf_path = score2perf_path/"__init__.py"
+    else :
+        score2perf_path = score2perf_path.with_suffix(".py")
     score2perf_spec = importlib.util.spec_from_file_location(module_name, score2perf_path)
     score2perf_module = importlib.util.module_from_spec(score2perf_spec)
     sys.modules[module_name] = score2perf_module
@@ -24,6 +27,8 @@ def import_submodule(module_name):
 
     return score2perf_module
 
+import_submodule("tensor2tensor.data_generators")
+import_submodule("tensor2tensor.models.transformer")
 import_submodule("magenta.models.score2perf")
 
 from magenta.models.score2perf import score2perf
