@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 
-# prevent unneeded import which has platform incompatibilities
 import sys
-sys.modules['note_seq.audio_io'] = {}
-
 import numpy as np
+
+# prevent unneeded import which has platform incompatibilities
+from import_helper import import_submodule
+sys.modules['note_seq.audio_io'] = {}
 from note_seq.midi_io import midi_file_to_note_sequence
+import_submodule("magenta.models.score2perf")
 from magenta.models.score2perf import score2perf
+
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.utils import trainer_lib, decoding
 
