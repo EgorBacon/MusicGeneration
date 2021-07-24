@@ -2,7 +2,8 @@ import time
 import tensorflow.compat.v1 as tf
 
 tf.disable_v2_behavior()
-
+import sys
+sys.modules["note_seq.audio_io"] = {}
 import note_seq
 import numpy as np
 
