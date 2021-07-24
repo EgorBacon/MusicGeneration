@@ -13,19 +13,19 @@ def import_submodule(module_name):
     import importlib
     parts = module_name.split(".")
     package_name = parts[0]
-    magenta_spec = importlib.util.find_spec(package_name)
-    sys.modules[package_name] = importlib.util.module_from_spec(magenta_spec)
-    score2perf_path = Path(magenta_spec.submodule_search_locations[0])/Path(*parts[1:]) #/"__init__.py"
-    if score2perf_path.is_dir():
-        score2perf_path = score2perf_path/"__init__.py"
+    package_spec = importlib.util.find_spec(package_name)
+    sys.modules[package_name] = importlib.util.module_from_spec(package_spec)
+    submodule_path = Path(package_spec.submodule_search_locations[0])/Path(*parts[1:]) #/"__init__.py"
+    if submodule_path.is_dir():
+        submodule_path = submodule_path/"__init__.py"
     else :
-        score2perf_path = score2perf_path.with_suffix(".py")
-    score2perf_spec = importlib.util.spec_from_file_location(module_name, score2perf_path)
-    score2perf_module = importlib.util.module_from_spec(score2perf_spec)
-    sys.modules[module_name] = score2perf_module
-    score2perf_spec.loader.exec_module(score2perf_module)
+        submodule_path = submodule_path.with_suffix(".py")
+    submodule_spec = importlib.util.spec_from_file_location(module_name, submodule_path)
+    submodule_module = importlib.util.module_from_spec(submodule_spec)
+    sys.modules[module_name] = submodule_module
+    submodule_spec.loader.exec_module(submodule_module)
 
-    return score2perf_module
+    return submodule_module
 
 import_submodule("tensor2tensor.data_generators")
 import_submodule("tensor2tensor.models.transformer")
