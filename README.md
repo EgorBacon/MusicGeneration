@@ -31,3 +31,8 @@ There are currently 4 available modes which can be switched between with the use
 3. Improv: Jams along after you play taking inspiration from what the user played
 4. Accompaniment: Plays layering on top of the last thing you played
 
+# Misc:
+```bash
+sudo docker run -it --rm --runtime nvidia --network host -v "$PWD:/app" -w /app musicgeneration
+```
+

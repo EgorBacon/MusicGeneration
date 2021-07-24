@@ -5,9 +5,33 @@ tf.disable_v2_behavior()
 
 import note_seq
 import numpy as np
-from score2perf import score2perf
+
+def import_submodule(module_name):
+    import sys
+    from pathlib import Path
+    import importlib
+    parts = module_name.split(".")
+    package_name = parts[0]
+    magenta_spec = importlib.util.find_spec(package_name)
+    sys.modules[package_name] = {}
+    score2perf_path = Path(magenta_spec.submodule_search_locations[0])/Path(*parts[1:])/"__init__.py"
+
+    score2perf_spec = importlib.util.spec_from_file_location(module_name, score2perf_path)
+    score2perf_module = importlib.util.module_from_spec(score2perf_spec)
+    sys.modules[module_name] = score2perf_module
+    score2perf_spec.loader.exec_module(score2perf_module)
+
+    return score2perf_module
+
+import_submodule("magenta.models.score2perf")
+
+from magenta.models.score2perf import score2perf
 from tensor2tensor.data_generators import text_encoder
 from tensor2tensor.utils import trainer_lib, decoding
+
+
+
+
 import os
 #from magenta.models.performance_rnn import performance_sequence_generator
 #from magenta.models.shared import sequence_generator_bundle
