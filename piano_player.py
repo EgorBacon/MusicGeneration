@@ -2,8 +2,11 @@
 import time
 import fluidsynth
 import pygame.midi
+import sys
+sys.modules["note_seq.audio_io"] = {}
 from note_seq.protobuf import music_pb2
 import threading
+
 from collections import deque
 
 #from google.colab import files
