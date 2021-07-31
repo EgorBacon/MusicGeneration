@@ -111,7 +111,10 @@ RUN pip3 install bokeh
 RUN pip3 install pandas
 RUN pip3 install pygtrie
 RUN pip3 install tensorflow_probability==0.7.0
-
+RUN pip3 install 'numpy<1.19.0'
+RUN pip3 install pygame
+RUN pip3 install 'scipy==1.1.0'
+RUN pip3 install 'scikit-learn==0.21.3'
 
 #ADD assets /
 #ADD requirements.txt /app/requirements.txt
