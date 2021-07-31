@@ -8,7 +8,8 @@ from collections import deque
 
 #from google.colab import files
 
-import note_seq
+from note_seq.midi_io import note_sequence_to_midi_file, midi_file_to_note_sequence
+from note_seq.sequences_lib import concatenate_sequences
 import requests
 
 event_buffer = deque()
@@ -156,7 +157,7 @@ def generate_notes_loop_unconditional(fs):
 
 def generate_from_server(api, input_ns):
     captured_notes_path = "captured_notes.mid"
-    note_seq.note_sequence_to_midi_file(input_ns, captured_notes_path)
+    note_sequence_to_midi_file(input_ns, captured_notes_path)
 
     url = 'http://localhost:5050'+api
     files = {'file': open(captured_notes_path, 'rb')}
@@ -165,7 +166,7 @@ def generate_from_server(api, input_ns):
     response_notes_path = "generate_notes.mid"
     with open(response_notes_path, 'wb') as f:
         f.write(r.content)
-    response_notes = note_seq.midi_file_to_note_sequence(response_notes_path)
+    response_notes = midi_file_to_note_sequence(response_notes_path)
     return response_notes
 
 def change_selected_generator(new_selection):
@@ -205,7 +206,7 @@ def select_notes_to_play():
 
     captured_time = max(pygame.midi.time() / 1000, captured_notes.total_time)
 
-    generated_notes = note_seq.concatenate_sequences([captured_notes, generated_notes],[captured_time, generated_notes.total_time])
+    generated_notes = concatenate_sequences([captured_notes, generated_notes],[captured_time, generated_notes.total_time])
 
     print(f"Now Playing...{len(generated_notes.notes)}")
 

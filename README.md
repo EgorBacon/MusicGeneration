@@ -33,6 +33,10 @@ There are currently 4 available modes which can be switched between with the use
 
 # Misc:
 ```bash
+docker build -t musicgeneration Docker
+```
+
+```bash
 sudo docker run -it --rm --runtime nvidia --network host -v "$PWD:/app" -w /app musicgeneration
 ```
 
