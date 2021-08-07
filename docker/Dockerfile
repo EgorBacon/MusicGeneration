@@ -75,19 +75,24 @@ RUN apt-get update -y \
 # 	python3 setup.py install
 
 
-RUN apt-get update -y \
-	&& DEBIAN_FRONTEND=noninteractive apt-get install -y \
-		python3-matplotlib \
-		python3-numpy \
-		python3-scipy \
-		python3-skimage \
-		python3-sklearn \
-	&& rm -rf /var/lib/apt/lists
+# RUN apt-get update -y \
+# 	&& DEBIAN_FRONTEND=noninteractive apt-get install -y \
+# 		python3-matplotlib \
+# 		python3-numpy \
+# 		python3-scipy \
+# 		python3-skimage \
+# 		python3-sklearn \
+# 	&& rm -rf /var/lib/apt/lists
 
 
 # RUN easy_install pip && \
 # 	pip install -U pip
 
+RUN pip3 install -U 'numpy<1.19.0'
+RUN pip3 install -U matplotlib
+RUN pip3 install -U scipy
+# RUN pip3 install -U skimage
+RUN pip3 install -U sklearn
 RUN	pip3 install -U jupyter[notebook]
 RUN pip3 install -U Cython
 RUN pip3 install -U pillow
@@ -111,13 +116,39 @@ RUN pip3 install bokeh
 RUN pip3 install pandas
 RUN pip3 install pygtrie
 RUN pip3 install tensorflow_probability==0.7.0
-RUN pip3 install 'numpy<1.19.0'
 RUN pip3 install pygame
-RUN pip3 install 'scipy==1.1.0'
-RUN pip3 install 'scikit-learn==0.21.3'
+RUN pip3 install gym
+RUN pip3 install 'scikit-image'
+RUN pip3 install tensorflow_gan
+RUN pip3 install mesh_tensorflow
+RUN pip3 install 'mido==1.2.6'
+# RUN pip3 install 'scipy==1.1.0'
+# RUN pip3 install 'scikit-learn==0.21.3'
 
 #ADD assets /
 #ADD requirements.txt /app/requirements.txt
 #RUN pip3 install -r /app/requirements.txt
 
 #CMD jupyter notebook --allow-root
+
+
+
+#
+# note-seq 0.0.3 requires intervaltree>=2.1.0, which is not installed.
+# note-seq 0.0.3 requires librosa>=0.6.2, which is not installed.
+# note-seq 0.0.3 requires pydub, which is not installed.
+# tensorflow 1.15.4+nv20.11 requires numpy<1.19.0,>=1.16.0, but you have numpy 1.19.5 which is incompatible.
+# magenta 2.1.3 requires mido==1.2.6, but you have mido 1.2.10 which is incompatible.
+#
+# magenta 2.1.3 requires dm-sonnet, which is not installed.
+# magenta 2.1.3 requires imageio, which is not installed.
+# magenta 2.1.3 requires librosa<0.8.0,>=0.6.2, which is not installed.
+# magenta 2.1.3 requires mir-eval>=0.4, which is not installed.
+# magenta 2.1.3 requires numba<0.50, which is not installed.
+# magenta 2.1.3 requires python-rtmidi<1.2,>=1.1, which is not installed.
+# magenta 2.1.3 requires sk-video, which is not installed.
+# magenta 2.1.3 requires sox>=1.3.7, which is not installed.
+# magenta 2.1.3 requires tf-slim, which is not installed.
+
+
+

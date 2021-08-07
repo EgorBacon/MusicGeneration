@@ -23,7 +23,7 @@ Optional: build the Docker image
 
 ```bash
 docker build -t music-generation docker
-docker run --rm -it --runtime nvidia --network host -v "$PWD:/app" -w /app music-generation
+docker run --rm -it --runtime nvidia --device /dev/snd/midiC2D0 --network host -v "$PWD:/app" -w /app music-generation
 ```
 
 ### Operation

@@ -6,11 +6,11 @@ sys.modules['note_seq.audio_io'] = {}
 
 import time
 import pygame.midi
-import pygame.mixer
+# import pygame.mixer
 from note_seq.midi_io import note_sequence_to_midi_file, midi_file_to_note_sequence
 from note_seq.sequences_lib import concatenate_sequences
 from note_seq.protobuf import music_pb2
-import fluidsynth
+# import fluidsynth
 from collections import deque
 
 from threading import Thread
@@ -19,7 +19,7 @@ import pretty_midi
 import requests
 
 
-SF2_PATH = "/Users/jjclark/Projects/music-generation/content/Yamaha-C5-Salamander-JNv5.1.sf2"
+SF2_PATH = "./content/Yamaha-C5-Salamander-JNv5.1.sf2"
 SAMPLE_RATE = 16000
 
 
@@ -53,7 +53,7 @@ def start():
     global midi_in
     global midi_out
 
-    pygame.mixer.init()
+    # pygame.mixer.init()
     pygame.midi.init()
     midi_in_id = pygame.midi.get_default_input_id()
     if midi_in_id == -1:
@@ -64,10 +64,10 @@ def start():
     midi_out = pygame.midi.Output(pygame.midi.get_default_output_id())
     print("Connected to MIDI input", pygame.midi.get_device_info(midi_in.device_id))
 
-    fs = fluidsynth.Synth()
-    fs.start()
-    sfid = fs.sfload(SF2_PATH)
-    fs.program_select(0, sfid, 0, 0)
+    # fs = fluidsynth.Synth()
+    # fs.start()
+    # sfid = fs.sfload(SF2_PATH)
+    # fs.program_select(0, sfid, 0, 0)
 
     captured_notes = music_pb2.NoteSequence()
     captured_notes.tempos.add(qpm=60)
@@ -82,15 +82,14 @@ def start():
 
 
 def stop():
-    global fs
+    # global fs
     pygame.midi.quit()
-    fs.delete()
+    # fs.delete()
 
 
 def update():
     global captured_notes
     global last_event_time
-    global fs
     global midi_in
 
     new_events = midi_in.read(100)
@@ -264,7 +263,6 @@ def is_currently_playing(ns):
 
 
 def interrupt_ns(ns):
-    global fs
     global midi_out
     if ns:
         for note in ns.notes:
@@ -286,7 +284,7 @@ def play_selected_notes():
         if generated_notes is not None:
             for note in generated_notes.notes:
                 if last_played_time < note.start_time < now:
-                    # print(f"playing {pretty_midi.note_number_to_name(note.pitch)}")
+                    print(f"playing {pretty_midi.note_number_to_name(note.pitch)}")
                     # fs.noteon(chan=0, key=note.pitch, vel=note.velocity)
                     midi_out.note_on(note.pitch, velocity=note.velocity, channel=0)
                 if last_played_time < note.end_time < now:
