@@ -23,6 +23,8 @@ For this project you need three things:
     ```bash
     ./Launcher.sh 
     ```
+   
+4. Alternatively the frontend and backend can be run on different machines with one hosting the backend server and another connecting to it with the front end code (check line 32 for correct ip address)
 
 # Usage:
 There are currently 4 available modes which can be switched between with the use of on keyboard "Dynamic Pad" aka "Drum Pad":
@@ -31,7 +33,9 @@ There are currently 4 available modes which can be switched between with the use
 3. Improv: Jams along after you play taking inspiration from what the user played
 4. Accompaniment: Plays layering on top of the last thing you played
 
-# Misc:
+
+
+# For Docker
 ```bash
 docker build -t musicgeneration Docker
 ```

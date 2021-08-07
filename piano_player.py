@@ -15,6 +15,8 @@ from note_seq.midi_io import note_sequence_to_midi_file, midi_file_to_note_seque
 from note_seq.sequences_lib import concatenate_sequences
 import requests
 
+import argparse
+
 event_buffer = deque()
 
 SF2_PATH = './content/Yamaha-C5-Salamander-JNv5.1.sf2'
@@ -27,14 +29,22 @@ last_event_time = 0
 generated_notes = None
 generated_bars = deque()
 selected_generator = "unconditional"
-
+backend_host = 'localhost:5050'
 
 def main():
+    parse_arguments()
     start()
     while True:
         update()
         time.sleep(0.01)
     stop()
+
+def parse_arguments():
+    global backend_host
+    parser = argparse.ArgumentParser(description='Frontend to Neural Net Music Generator')
+    parser.add_argument('--backend', default=backend_host, help='hostname and port of the Neural Net server')
+    args = parser.parse_args()
+    backend_host = args.backend()
 
 def start():
     global fs
@@ -162,7 +172,7 @@ def generate_from_server(api, input_ns):
     captured_notes_path = "captured_notes.mid"
     note_sequence_to_midi_file(input_ns, captured_notes_path)
 
-    url = 'http://localhost:5050'+api
+    url = 'http://' + backend_host + api
     files = {'file': open(captured_notes_path, 'rb')}
     r = requests.post(url,files=files)
 
