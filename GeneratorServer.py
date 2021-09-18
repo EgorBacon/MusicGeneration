@@ -3,7 +3,7 @@
 import os
 from flask import Flask, request, redirect, send_from_directory
 from werkzeug.utils import secure_filename
-from Generators import UnconditionalGenerator, MelodyConditionedGenerator
+from Generators import UnconditionalGenerator, MelodyConditionedGenerator, RandomGenerator
 import note_seq
 
 def create_app(test_config=None):
@@ -37,6 +37,13 @@ def create_app(test_config=None):
         <form action="/generate_melody_conditioned" method="post" enctype="multipart/form-data">
           <fieldset>
             <legend>Generate Accompaniment</legend>
+            <input type="file" name="file">
+            <input type="submit" value="Upload">
+          </fieldset>
+        </form>
+        <form action="/generate_random" method="post" enctype="multipart/form-data">
+          <fieldset>
+            <legend>Generate Random</legend>
             <input type="file" name="file">
             <input type="submit" value="Upload">
           </fieldset>
@@ -87,6 +94,25 @@ def create_app(test_config=None):
 
         captured_notes = note_seq.midi_file_to_note_sequence(file_path)
         generated_notes = mc_generator.generate_notes(captured_notes)
+        note_seq.note_sequence_to_midi_file(generated_notes, generated_path)
+
+        return send_from_directory(app.config['UPLOAD_FOLDER'], "generated_notes.mid")
+
+    random_generator = RandomGenerator()
+
+    @app.route('/generate_random', methods=['POST'])
+    def generate_melody_conditioned():
+        file = request.files['file']
+        if file.filename == '':
+            # empty file
+            return redirect("/")
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        generated_path = os.path.join(app.config['UPLOAD_FOLDER'], "generated_notes.mid")
+
+        captured_notes = note_seq.midi_file_to_note_sequence(file_path)
+        generated_notes = random_generator.generate_notes(captured_notes)
         note_seq.note_sequence_to_midi_file(generated_notes, generated_path)
 
         return send_from_directory(app.config['UPLOAD_FOLDER'], "generated_notes.mid")

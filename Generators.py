@@ -218,6 +218,20 @@ class MelodyConditionedGenerator:
         # Play and plot.
         return accompaniment_ns
 
+class RandomGenerator(object):
+    def __init__(self):
+        pass
+
+    def generate_notes(self, captured_notes):
+        print("Generating random notes...")
+        new_notes = note_seq.NoteSequence()
+        # - identify events in captured_notes
+        # - for each type of event, make a list of all the type of events that come after it
+        # - several times:
+            # - look at last note played
+            # - select a likely event to follow
+        return new_notes
+
 
 """class PerfomanceWithDynamicsGenerator:
 

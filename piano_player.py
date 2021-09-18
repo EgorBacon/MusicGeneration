@@ -44,7 +44,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Frontend to Neural Net Music Generator')
     parser.add_argument('--backend', default=backend_host, help='hostname and port of the Neural Net server')
     args = parser.parse_args()
-    backend_host = args.backend()
+    backend_host = 'localhost:5050'
 
 def start():
     global fs
