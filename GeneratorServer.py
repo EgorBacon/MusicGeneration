@@ -101,7 +101,7 @@ def create_app(test_config=None):
     random_generator = RandomGenerator()
 
     @app.route('/generate_random', methods=['POST'])
-    def generate_melody_conditioned():
+    def generate_random_melody():
         file = request.files['file']
         if file.filename == '':
             # empty file
