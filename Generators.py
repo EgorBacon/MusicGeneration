@@ -7,6 +7,9 @@ sys.modules["note_seq.audio_io"] = {}
 import note_seq
 import numpy as np
 
+from collections import defaultdict
+import random
+
 def import_submodule(module_name):
     import sys
     from pathlib import Path
@@ -224,7 +227,23 @@ class RandomGenerator(object):
 
     def generate_notes(self, captured_notes):
         print("Generating random notes...")
+        previous_note = None
+        bigrams = defaultdict(list)
+        for note in captured_notes.notes:
+            bigrams[previous_note].append(note)
+            previous_note = note.pitch
+
+
         new_notes = note_seq.NoteSequence()
+        current_time = 0
+        previous_note = captured_notes.notes[-1].pitch
+        for i in range(30):
+            likely_notes = bigrams.get(previous_note, captured_notes.notes)
+            note = random.choice(likely_notes)
+            previous_note = note.pitch
+            end_time = current_time + (note.end_time - note.start_time)
+            new_notes.notes.add(pitch=note.pitch, velocity=note.velocity, start_time=current_time, end_time=end_time)
+            current_time = end_time
         # - identify events in captured_notes
         # - for each type of event, make a list of all the type of events that come after it
         # - several times:

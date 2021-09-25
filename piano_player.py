@@ -130,6 +130,8 @@ def update():
                 change_selected_generator("unconditional")
             elif pitch == 46:
                 change_selected_generator("melody_conditioned")
+            elif pitch == 43:
+                change_selected_generator("random")
 
 
 
@@ -148,6 +150,7 @@ def generate_notes_loop_unconditional(fs):
         "quiet": None,
         "unconditional" : '/generate_unconditional',
         "melody_conditioned" : '/generate_melody_conditioned',
+        "random" : '/generate_random',
         }
 
 
